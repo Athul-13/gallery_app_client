@@ -1,11 +1,93 @@
 @import "tailwindcss";
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* Global background image */
+html {
+  position: relative;
+  min-height: 100vh;
+  background-image: url('./assets/bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* Dark overlay layer - positioned above background */
+html::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(13, 13, 13, 0.6); /* Adjust opacity as needed (0.3-0.8) */
+  z-index: 0;
+  pointer-events: none;
 }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  position: relative;
+  margin: 0;
+  padding: 0;
+  /* Prevent horizontal scroll on mobile */
+  overflow-x: hidden;
+  /* Improve touch scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure no horizontal overflow - but allow Tailwind max-width utilities to work */
+* {
+  box-sizing: border-box;
+}
+
+/* Prevent horizontal overflow on images and media */
+img,
+video,
+iframe,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Allow form elements to respect their container's max-width */
+form,
+fieldset {
+  max-width: 100%;
+}
+
+/* Improve touch targets */
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+/* Ensure root and all content is above the overlay */
+#root {
+  position: relative;
+  z-index: 5;
+  min-height: 100vh;
+}
+
+/* Override browser autofill styles to maintain dark theme */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px rgba(255, 255, 255, 0.05) inset !important;
+  -webkit-text-fill-color: white !important;
+  caret-color: white;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Firefox autofill override */
+input:-moz-autofill {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: white !important;
 }
