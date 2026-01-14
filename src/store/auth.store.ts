@@ -22,6 +22,7 @@ interface AuthActions {
   login: (credentials: LoginCredentials) => Promise<void>
   logout: () => Promise<void>
   refreshToken: () => Promise<void>
+  checkAuth: () => Promise<void>
   
   // Password operations
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>
@@ -179,6 +180,37 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         error: error instanceof Error ? error.message : 'Token refresh failed',
       })
       throw error
+    }
+  },
+
+  /**
+   * Check authentication status on app initialization
+   */
+  checkAuth: async () => {
+    try {
+      const response = await authService.refreshToken()
+      
+      const user: User = {
+        id: response.user.id,
+        email: response.user.email,
+        phone: response.user.phone,
+        createdAt: get().user?.createdAt || '',
+        updatedAt: get().user?.updatedAt || '',
+      }
+      
+      set({
+        user,
+        isAuthenticated: true,
+        error: null,
+      })
+    } catch {
+      // Silently fail - tokens don't exist or are invalid
+      // Keep initial state (isAuthenticated: false)
+      set({
+        user: null,
+        isAuthenticated: false,
+        error: null,
+      })
     }
   },
 
