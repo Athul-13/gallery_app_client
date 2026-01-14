@@ -1,7 +1,7 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Fieldset, Legend } from '@headlessui/react'
+import { Fieldset } from '@headlessui/react'
 import { useAuthStore } from '@/store'
 import { useNavigate } from 'react-router-dom'
 import { ROUTES } from '@/constants'
@@ -69,8 +69,6 @@ export const RegisterForm = () => {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="mt-8 w-full">
       <Fieldset className="space-y-5 sm:space-y-6 rounded-xl bg-white/5 p-5 sm:p-6 lg:p-10">
-        <Legend className="text-lg sm:text-base/7 font-semibold text-white">Create your account</Legend>
-        
         {/* Email Field */}
         <FormInput
           {...registerField('email')}
