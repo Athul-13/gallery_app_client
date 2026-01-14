@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useImageStore } from '@/store'
-import { Navbar } from '@/components/common'
+import { Navbar, UploadProgressBar } from '@/components/common'
 import { ImageCard, ImageCardPlaceholder, UploadModal } from '@/components/images'
 
 /**
@@ -10,12 +10,25 @@ export const DashboardPage = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
 
-  const { images, isLoading, fetchImages } = useImageStore()
+  const {
+    images,
+    isLoading,
+    fetchImages,
+    uploadState,
+    uploadProgress,
+  } = useImageStore()
 
   // Fetch images on mount
   useEffect(() => {
     fetchImages()
   }, [fetchImages])
+
+  // Refresh images after successful upload
+  useEffect(() => {
+    if (uploadState === 'success') {
+      fetchImages()
+    }
+  }, [uploadState, fetchImages])
 
   /**
    * Handle file selection from upload modal
@@ -34,13 +47,25 @@ export const DashboardPage = () => {
     setSelectedFiles([])
   }
 
+  /**
+   * Handle upload start - close modal to show progress bar
+   */
+  const handleUploadStart = () => {
+    setIsUploadModalOpen(false)
+  }
+
   return (
     <div className="min-h-screen">
       {/* Fixed Navbar */}
       <Navbar />
 
-      {/* Main Content - with top padding for navbar */}
-      <div className="pt-16">
+      {/* Upload Progress Bar - Show at top during upload */}
+      {uploadState === 'uploading' && uploadProgress && (
+        <UploadProgressBar progress={uploadProgress} />
+      )}
+
+      {/* Main Content - with top padding for navbar and progress bar */}
+      <div className={uploadState === 'uploading' ? 'pt-32' : 'pt-16'}>
         <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
           <div className="px-4 py-6 sm:px-0">
             {/* Header */}
@@ -91,6 +116,7 @@ export const DashboardPage = () => {
         onClose={handleCloseModal}
         onFilesSelected={handleFilesSelected}
         selectedFiles={selectedFiles}
+        onUploadStart={handleUploadStart}
       />
     </div>
   )

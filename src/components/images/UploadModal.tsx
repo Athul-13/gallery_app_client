@@ -1,8 +1,10 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 import { HiX, HiPhotograph } from 'react-icons/hi'
 import toast from 'react-hot-toast'
 import { ImageCarousel } from './ImageCarousel'
+import { ConfirmDialog } from '@/components/common'
+import { useImageStore } from '@/store'
 
 // File validation constants
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
@@ -22,6 +24,7 @@ interface UploadModalProps {
   onFilesSelected: (files: File[]) => void
   selectedFiles?: File[]
   onImagesWithTitlesChange?: (images: ImageWithTitle[]) => void
+  onUploadStart?: () => void
 }
 
 /**
@@ -34,10 +37,15 @@ export const UploadModal = ({
   onFilesSelected,
   selectedFiles = [],
   onImagesWithTitlesChange,
+  onUploadStart,
 }: UploadModalProps) => {
   const [dragActive, setDragActive] = useState(false)
   const [imagesWithTitles, setImagesWithTitles] = useState<ImageWithTitle[]>([])
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const { uploadBulkImages, uploadImage } = useImageStore()
 
   /**
    * Initialize images with titles when files are selected
@@ -70,7 +78,6 @@ export const UploadModal = ({
         id: `${file.name}-${file.size}-${index}`,
       }))
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFiles])
 
   /**
@@ -217,31 +224,135 @@ export const UploadModal = ({
    */
   const handleTitleChange = (id: string, title: string) => {
     setImagesWithTitles((prev) =>
-      prev.map((img) => (img.id === id ? { ...img, title } : img))
+      prev.map((img) => (img.id === id ? { ...img, title: title.trim() } : img))
     )
   }
 
-  return (
-    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+  /**
+   * Validate title
+   */
+  const validateTitle = (title: string): string | null => {
+    const trimmed = title.trim()
+    if (!trimmed) {
+      return 'Title cannot be empty or whitespace only'
+    }
+    if (trimmed.length > 200) {
+      return 'Title cannot exceed 200 characters'
+    }
+    return null
+  }
 
-      {/* Modal */}
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <DialogPanel className="mx-auto max-w-2xl w-full rounded-lg bg-white shadow-xl">
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <DialogTitle className="text-xl font-semibold text-gray-900">
-              Upload Images
-            </DialogTitle>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
-              aria-label="Close"
-            >
-              <HiX className="h-6 w-6" />
-            </button>
-          </div>
+  /**
+   * Check if all images have valid titles
+   */
+  const areAllTitlesValid = useMemo(() => {
+    if (imagesWithTitles.length === 0) return false
+    return imagesWithTitles.every((img) => {
+      const error = validateTitle(img.title)
+      return error === null
+    })
+  }, [imagesWithTitles])
+
+  /**
+   * Handle upload
+   */
+  const handleUpload = async () => {
+    // Validate all titles
+    const invalidTitles: string[] = []
+    imagesWithTitles.forEach((img, index) => {
+      const error = validateTitle(img.title)
+      if (error) {
+        invalidTitles.push(`Image ${index + 1}: ${error}`)
+      }
+    })
+
+    if (invalidTitles.length > 0) {
+      invalidTitles.forEach((error) => toast.error(error))
+      return
+    }
+
+    setIsUploading(true)
+    if (onUploadStart) {
+      onUploadStart()
+    }
+
+    try {
+      const files = imagesWithTitles.map((img) => img.file)
+      const titles = imagesWithTitles.map((img) => img.title.trim())
+
+      if (files.length === 1) {
+        // Single upload
+        await uploadImage(files[0], titles[0])
+      } else {
+        // Bulk upload
+        await uploadBulkImages(files, titles)
+      }
+
+      // Close modal and reset
+      handleCloseModal()
+      toast.success(
+        `Successfully uploaded ${files.length} image${files.length > 1 ? 's' : ''}`
+      )
+    } catch {
+      // Error is already handled in the store
+      // Don't close modal on error - let user retry
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  /**
+   * Handle modal close with confirmation
+   */
+  const handleCloseClick = () => {
+    // If there are images with titles, show confirmation
+    if (imagesWithTitles.length > 0 && !isUploading) {
+      const hasTitles = imagesWithTitles.some((img) => img.title.trim())
+      if (hasTitles) {
+        setShowCloseConfirm(true)
+        return
+      }
+    }
+    handleCloseModal()
+  }
+
+  /**
+   * Handle close modal and cleanup
+   */
+  const handleCloseModal = () => {
+    // Cleanup object URLs
+    imagesWithTitles.forEach((img) => {
+      URL.revokeObjectURL(img.preview)
+    })
+    setImagesWithTitles([])
+    setShowCloseConfirm(false)
+    setIsUploading(false)
+    onClose()
+  }
+
+  return (
+    <>
+      <Dialog open={isOpen} onClose={handleCloseClick} className="relative z-50">
+        {/* Backdrop */}
+        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+
+        {/* Modal */}
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <DialogPanel className="mx-auto max-w-2xl w-full rounded-lg bg-white shadow-xl">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <DialogTitle className="text-xl font-semibold text-gray-900">
+                Upload Images
+              </DialogTitle>
+              <button
+                onClick={handleCloseClick}
+                disabled={isUploading}
+                className="text-gray-400 hover:text-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Close"
+              >
+                <HiX className="h-6 w-6" />
+              </button>
+            </div>
 
           {/* Content */}
           <div className="p-6">
@@ -316,12 +427,53 @@ export const UploadModal = ({
                   onChange={handleFileInputChange}
                   className="hidden"
                   aria-label="Select images"
+                  disabled={isUploading}
                 />
+
+                {/* Upload Button */}
+                <div className="pt-4 border-t border-gray-200">
+                  <button
+                    onClick={handleUpload}
+                    disabled={!areAllTitlesValid || isUploading}
+                    className={`
+                      w-full px-4 py-3 rounded-lg font-semibold text-white transition-all
+                      disabled:opacity-50 disabled:cursor-not-allowed
+                      focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+                      ${
+                        areAllTitlesValid && !isUploading
+                          ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
+                          : 'bg-gray-400 cursor-not-allowed'
+                      }
+                    `}
+                  >
+                    {isUploading
+                      ? 'Uploading...'
+                      : `Upload ${imagesWithTitles.length} image${imagesWithTitles.length > 1 ? 's' : ''}`}
+                  </button>
+                  {!areAllTitlesValid && imagesWithTitles.length > 0 && (
+                    <p className="mt-2 text-sm text-red-600 text-center">
+                      Please add titles to all images before uploading
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </DialogPanel>
       </div>
     </Dialog>
+
+    {/* Close Confirmation Dialog */}
+    <ConfirmDialog
+      isOpen={showCloseConfirm}
+      onClose={() => setShowCloseConfirm(false)}
+      onConfirm={handleCloseModal}
+      title="Discard Changes?"
+      message="You have unsaved changes. Are you sure you want to close without uploading?"
+      confirmText="Discard"
+      cancelText="Cancel"
+      variant="danger"
+    />
+    </>
   )
 }

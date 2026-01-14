@@ -153,32 +153,64 @@ export const useImageStore = create<ImageStore>((set, get) => ({
 
   /**
    * Upload multiple images (bulk upload)
-   * Note: Progress tracking will be handled by upload progress updates
+   * Uploads images sequentially to track per-image progress
    */
   uploadBulkImages: async (files: File[], titles: string[]) => {
+    const totalImages = files.length
+    const uploadedImages: Image[] = []
+
     set({
       uploadState: 'uploading',
       uploadProgress: {
         currentImage: 0,
-        totalImages: files.length,
-        currentImageName: '',
+        totalImages,
+        currentImageName: files[0]?.name || '',
         percentage: 0,
       },
       error: null,
     })
 
     try {
-      const result = await imageService.uploadBulkImages(files, titles)
+      // Upload images sequentially to track progress
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const title = titles[i]
+        const currentImageNum = i + 1
 
-      // Add images to store
+        // Update progress before uploading
+        set({
+          uploadProgress: {
+            currentImage: currentImageNum,
+            totalImages,
+            currentImageName: file.name,
+            percentage: (i / totalImages) * 100,
+          },
+        })
+
+        // Upload single image
+        const image = await imageService.uploadImage(file, title)
+        uploadedImages.push(image)
+
+        // Update progress after uploading
+        set({
+          uploadProgress: {
+            currentImage: currentImageNum,
+            totalImages,
+            currentImageName: file.name,
+            percentage: (currentImageNum / totalImages) * 100,
+          },
+        })
+      }
+
+      // Add all images to store
       set((state) => ({
-        images: [...result.images, ...state.images],
-        total: state.total + result.total,
+        images: [...uploadedImages, ...state.images],
+        total: state.total + uploadedImages.length,
         uploadState: 'success',
         uploadProgress: null,
       }))
 
-      toast.success(`Successfully uploaded ${result.total} image(s)`)
+      toast.success(`Successfully uploaded ${uploadedImages.length} image(s)`)
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to upload images'

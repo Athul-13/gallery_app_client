@@ -80,7 +80,8 @@ const SortableImageItem = ({
       ref={setNodeRef}
       style={style}
       className={clsx(
-        'shrink-0 w-full px-4 transition-all duration-300 origin-center',
+        'shrink-0 w-full transition-all duration-300 origin-center',
+        isReorderMode ? 'px-1' : 'px-4',
         isActive && !isReorderMode && 'ring-2 ring-blue-500 rounded-lg'
       )}
     >
@@ -164,32 +165,41 @@ export const ImageCarousel = ({
     const { active } = event
     setIsReorderMode(true)
 
-    // Center scroll on pressed image
+    // Center scroll on pressed image and show adjacent images
     const pressedIndex = images.findIndex((img) => img.id === active.id)
     if (pressedIndex !== -1) {
       setActiveIndex(pressedIndex)
+      
+      // Wait for scale animation to complete (300ms) before calculating scroll
       setTimeout(() => {
         const container = scrollContainerRef.current
         if (container) {
-          const activeElement = container.querySelector(
+          const pressedElement = container.querySelector(
             `[data-image-index="${pressedIndex}"]`
           ) as HTMLElement
-          if (activeElement) {
+          
+          if (pressedElement) {
             const containerRect = container.getBoundingClientRect()
-            const elementRect = activeElement.getBoundingClientRect()
-            const scrollLeft = container.scrollLeft
-            const elementLeft = elementRect.left - containerRect.left + scrollLeft
-            const elementWidth = elementRect.width
             const containerWidth = containerRect.width
-            const targetScroll = elementLeft - (containerWidth / 2) + (elementWidth / 2)
+            
+            // Each image container is full width (w-full), so to show adjacent images:
+            // Scroll to center the pressed image's container, which will show adjacent containers
+            const pressedElementRect = pressedElement.getBoundingClientRect()
+            const scrollLeft = container.scrollLeft
+            const pressedElementLeft = pressedElementRect.left - containerRect.left + scrollLeft
+            const pressedElementWidth = pressedElementRect.width // This is the full container width
+            
+            // Center the pressed image's container in the viewport
+            // This ensures adjacent containers (with images) are visible
+            const targetScroll = pressedElementLeft - (containerWidth / 2) + (pressedElementWidth / 2)
 
             container.scrollTo({
-              left: targetScroll,
+              left: Math.max(0, targetScroll),
               behavior: 'smooth',
             })
           }
         }
-      }, 100)
+      }, 350) // Wait for scale animation (300ms) + small buffer
     }
   }
 
