@@ -1,39 +1,97 @@
-import { useAuthStore } from '@/store'
+import { useState, useEffect } from 'react'
+import { useImageStore } from '@/store'
+import { Navbar } from '@/components/common'
+import { ImageCard, ImageCardPlaceholder, UploadModal } from '@/components/images'
 
 /**
  * Dashboard Page (Protected)
  */
 export const DashboardPage = () => {
-  const user = useAuthStore((state) => state.user)
-  const logout = useAuthStore((state) => state.logout)
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+
+  const { images, isLoading, fetchImages } = useImageStore()
+
+  // Fetch images on mount
+  useEffect(() => {
+    fetchImages()
+  }, [fetchImages])
+
+  /**
+   * Handle file selection from upload modal
+   */
+  const handleFilesSelected = (files: File[]) => {
+    setSelectedFiles(files)
+    // Modal will be kept open for title input (Phase 4)
+    // For now, we'll close it and files will be handled in next phase
+  }
+
+  /**
+   * Handle upload modal close
+   */
+  const handleCloseModal = () => {
+    setIsUploadModalOpen(false)
+    setSelectedFiles([])
+  }
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="border-4 border-dashed border-white/10 rounded-lg p-5 sm:p-6 lg:p-8 bg-white/5">
-            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-4">
-              Welcome to Dashboard
-            </h1>
-            {user && (
-              <div className="mb-4 space-y-2">
-                <p className="text-sm sm:text-base text-white/80 break-words">
-                  <strong className="font-semibold">Email:</strong> {user.email}
-                </p>
-                <p className="text-sm sm:text-base text-white/80 break-words">
-                  <strong className="font-semibold">Phone:</strong> {user.phone}
+      {/* Fixed Navbar */}
+      <Navbar />
+
+      {/* Main Content - with top padding for navbar */}
+      <div className="pt-16">
+        <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+          <div className="px-4 py-6 sm:px-0">
+            {/* Header */}
+            <div className="mb-6">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
+                My Images
+              </h1>
+              <p className="text-white/60 text-sm">
+                Upload and manage your images
+              </p>
+            </div>
+
+            {/* Image Gallery */}
+            {isLoading ? (
+              <div className="text-center py-12">
+                <p className="text-white/60">Loading images...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {/* Upload Placeholder */}
+                <ImageCardPlaceholder
+                  onClick={() => setIsUploadModalOpen(true)}
+                />
+
+                {/* Image Cards */}
+                {images.map((image) => (
+                  <ImageCard key={image.id} image={image} />
+                ))}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!isLoading && images.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-white/60 mb-4">No images yet</p>
+                <p className="text-white/40 text-sm">
+                  Click the upload button to get started
                 </p>
               </div>
             )}
-            <button
-              onClick={logout}
-              className="px-5 py-3 sm:px-4 sm:py-2 text-base sm:text-sm bg-red-600/80 text-white rounded-md hover:bg-red-600 active:bg-red-700 transition-colors min-h-[44px] touch-manipulation"
-            >
-              Logout
-            </button>
           </div>
         </div>
       </div>
+
+      {/* Upload Modal */}
+      <UploadModal
+        isOpen={isUploadModalOpen}
+        onClose={handleCloseModal}
+        onFilesSelected={handleFilesSelected}
+        selectedFiles={selectedFiles}
+      />
     </div>
   )
 }

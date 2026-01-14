@@ -1,0 +1,328 @@
+import { create } from 'zustand'
+import { imageService } from '@/services'
+import type {
+  Image,
+  BulkUploadResponse,
+  PaginatedImagesResponse,
+  UploadProgress,
+  ImageUploadState,
+} from '@/types'
+import toast from 'react-hot-toast'
+
+/**
+ * Image Store State Interface
+ */
+interface ImageState {
+  images: Image[]
+  total: number
+  page: number
+  limit: number
+  isLoading: boolean
+  error: string | null
+  
+  // Upload state
+  uploadState: ImageUploadState
+  uploadProgress: UploadProgress | null
+  
+  // Selected files for upload (before upload starts)
+  selectedFiles: File[]
+  selectedTitles: string[]
+}
+
+/**
+ * Image Store Actions Interface
+ */
+interface ImageActions {
+  // Image operations
+  fetchImages: (options?: { page?: number; limit?: number }) => Promise<void>
+  uploadImage: (file: File, title: string) => Promise<void>
+  uploadBulkImages: (files: File[], titles: string[]) => Promise<void>
+  getImageById: (id: string) => Promise<Image | null>
+  
+  // Upload state management
+  setUploadState: (state: ImageUploadState) => void
+  setUploadProgress: (progress: UploadProgress | null) => void
+  setSelectedFiles: (files: File[]) => void
+  setSelectedTitles: (titles: string[]) => void
+  clearUploadState: () => void
+  
+  // State management
+  addImage: (image: Image) => void
+  addImages: (images: Image[]) => void
+  updateImage: (id: string, updates: Partial<Image>) => void
+  removeImage: (id: string) => void
+  clearError: () => void
+  reset: () => void
+}
+
+/**
+ * Combined Image Store Type
+ */
+type ImageStore = ImageState & ImageActions
+
+/**
+ * Initial state
+ */
+const initialState: ImageState = {
+  images: [],
+  total: 0,
+  page: 1,
+  limit: 20,
+  isLoading: false,
+  error: null,
+  uploadState: 'idle',
+  uploadProgress: null,
+  selectedFiles: [],
+  selectedTitles: [],
+}
+
+/**
+ * Create Image Store using Zustand
+ */
+export const useImageStore = create<ImageStore>((set, get) => ({
+  ...initialState,
+
+  /**
+   * Fetch all images for authenticated user
+   */
+  fetchImages: async (options?: { page?: number; limit?: number }) => {
+    set({ isLoading: true, error: null })
+
+    try {
+      const result = await imageService.getUserImages(options)
+
+      set({
+        images: result.images,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        isLoading: false,
+        error: null,
+      })
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to fetch images'
+      set({
+        isLoading: false,
+        error: errorMessage,
+      })
+      toast.error(errorMessage)
+      throw error
+    }
+  },
+
+  /**
+   * Upload single image
+   */
+  uploadImage: async (file: File, title: string) => {
+    set({
+      uploadState: 'uploading',
+      uploadProgress: {
+        currentImage: 1,
+        totalImages: 1,
+        currentImageName: file.name,
+        percentage: 0,
+      },
+      error: null,
+    })
+
+    try {
+      const image = await imageService.uploadImage(file, title)
+
+      // Add image to store
+      set((state) => ({
+        images: [image, ...state.images],
+        total: state.total + 1,
+        uploadState: 'success',
+        uploadProgress: null,
+      }))
+
+      toast.success('Image uploaded successfully')
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to upload image'
+      set({
+        uploadState: 'error',
+        uploadProgress: null,
+        error: errorMessage,
+      })
+      toast.error(errorMessage)
+      throw error
+    }
+  },
+
+  /**
+   * Upload multiple images (bulk upload)
+   * Note: Progress tracking will be handled by upload progress updates
+   */
+  uploadBulkImages: async (files: File[], titles: string[]) => {
+    set({
+      uploadState: 'uploading',
+      uploadProgress: {
+        currentImage: 0,
+        totalImages: files.length,
+        currentImageName: '',
+        percentage: 0,
+      },
+      error: null,
+    })
+
+    try {
+      const result = await imageService.uploadBulkImages(files, titles)
+
+      // Add images to store
+      set((state) => ({
+        images: [...result.images, ...state.images],
+        total: state.total + result.total,
+        uploadState: 'success',
+        uploadProgress: null,
+      }))
+
+      toast.success(`Successfully uploaded ${result.total} image(s)`)
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to upload images'
+      set({
+        uploadState: 'error',
+        uploadProgress: null,
+        error: errorMessage,
+      })
+      toast.error(errorMessage)
+      throw error
+    }
+  },
+
+  /**
+   * Get image by ID
+   */
+  getImageById: async (id: string) => {
+    set({ isLoading: true, error: null })
+
+    try {
+      const image = await imageService.getImageById(id)
+
+      // Update image in store if it exists
+      set((state) => {
+        const existingIndex = state.images.findIndex((img) => img.id === id)
+        if (existingIndex !== -1) {
+          const updatedImages = [...state.images]
+          updatedImages[existingIndex] = image
+          return { images: updatedImages, isLoading: false }
+        }
+        return { isLoading: false }
+      })
+
+      return image
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to fetch image'
+      set({
+        isLoading: false,
+        error: errorMessage,
+      })
+      toast.error(errorMessage)
+      return null
+    }
+  },
+
+  /**
+   * Set upload state
+   */
+  setUploadState: (state: ImageUploadState) => {
+    set({ uploadState: state })
+  },
+
+  /**
+   * Set upload progress
+   */
+  setUploadProgress: (progress: UploadProgress | null) => {
+    set({ uploadProgress: progress })
+  },
+
+  /**
+   * Set selected files for upload
+   */
+  setSelectedFiles: (files: File[]) => {
+    set({ selectedFiles: files })
+  },
+
+  /**
+   * Set selected titles for upload
+   */
+  setSelectedTitles: (titles: string[]) => {
+    set({ selectedTitles: titles })
+  },
+
+  /**
+   * Clear upload state
+   */
+  clearUploadState: () => {
+    set({
+      uploadState: 'idle',
+      uploadProgress: null,
+      selectedFiles: [],
+      selectedTitles: [],
+    })
+  },
+
+  /**
+   * Add single image to store
+   */
+  addImage: (image: Image) => {
+    set((state) => ({
+      images: [image, ...state.images],
+      total: state.total + 1,
+    }))
+  },
+
+  /**
+   * Add multiple images to store
+   */
+  addImages: (images: Image[]) => {
+    set((state) => ({
+      images: [...images, ...state.images],
+      total: state.total + images.length,
+    }))
+  },
+
+  /**
+   * Update image in store
+   */
+  updateImage: (id: string, updates: Partial<Image>) => {
+    set((state) => {
+      const index = state.images.findIndex((img) => img.id === id)
+      if (index === -1) return state
+
+      const updatedImages = [...state.images]
+      updatedImages[index] = { ...updatedImages[index], ...updates }
+      return { images: updatedImages }
+    })
+  },
+
+  /**
+   * Remove image from store
+   */
+  removeImage: (id: string) => {
+    set((state) => {
+      const filteredImages = state.images.filter((img) => img.id !== id)
+      return {
+        images: filteredImages,
+        total: Math.max(0, state.total - 1),
+      }
+    })
+  },
+
+  /**
+   * Clear error
+   */
+  clearError: () => {
+    set({ error: null })
+  },
+
+  /**
+   * Reset store to initial state
+   */
+  reset: () => {
+    set(initialState)
+  },
+}))

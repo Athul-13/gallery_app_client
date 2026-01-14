@@ -20,4 +20,11 @@ export const API_ROUTES = {
     BASE: '/user',
     PROFILE: '/user/profile',
   },
+  // Image routes
+  IMAGE: {
+    BASE: '/images',
+    UPLOAD: '/images/upload',
+    GET_ALL: '/images/get',
+    GET_BY_ID: (id: string) => `/images/${id}`,
+  },
 } as const
