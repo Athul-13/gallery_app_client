@@ -4,3 +4,4 @@
 
 export * from './api.routes'
 export * from './app.config'
+export * from './routes'
