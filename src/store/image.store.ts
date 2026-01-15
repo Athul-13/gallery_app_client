@@ -154,10 +154,12 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   /**
    * Upload multiple images (bulk upload)
    * Uploads images sequentially to track per-image progress
+   * Stops all uploads on error and shows which image failed
    */
   uploadBulkImages: async (files: File[], titles: string[]) => {
     const totalImages = files.length
     const uploadedImages: Image[] = []
+    let failedImageIndex: number | null = null
 
     set({
       uploadState: 'uploading',
@@ -187,39 +189,66 @@ export const useImageStore = create<ImageStore>((set, get) => ({
           },
         })
 
-        // Upload single image
-        const image = await imageService.uploadImage(file, title)
-        uploadedImages.push(image)
+        try {
+          // Upload single image
+          const image = await imageService.uploadImage(file, title)
+          uploadedImages.push(image)
 
-        // Update progress after uploading
-        set({
-          uploadProgress: {
-            currentImage: currentImageNum,
-            totalImages,
-            currentImageName: file.name,
-            percentage: (currentImageNum / totalImages) * 100,
-          },
-        })
+          // Update progress after uploading
+          set({
+            uploadProgress: {
+              currentImage: currentImageNum,
+              totalImages,
+              currentImageName: file.name,
+              percentage: (currentImageNum / totalImages) * 100,
+            },
+          })
+        } catch (error) {
+          // Stop all uploads on first error
+          failedImageIndex = i
+          throw error
+        }
       }
 
-      // Add all images to store
-      set((state) => ({
-        images: [...uploadedImages, ...state.images],
-        total: state.total + uploadedImages.length,
+      // Add all successfully uploaded images to store
+      if (uploadedImages.length > 0) {
+        set((state) => ({
+          images: [...uploadedImages, ...state.images],
+          total: state.total + uploadedImages.length,
+        }))
+      }
+
+      // Set success state
+      set({
         uploadState: 'success',
         uploadProgress: null,
-      }))
+      })
 
-      toast.success(`Successfully uploaded ${uploadedImages.length} image(s)`)
+      if (uploadedImages.length === totalImages) {
+        toast.success(`Successfully uploaded ${uploadedImages.length} image(s)`)
+      } else {
+        toast.error(
+          `Upload failed. ${uploadedImages.length} of ${totalImages} images uploaded successfully.`
+        )
+      }
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : 'Failed to upload images'
+        error instanceof Error
+          ? error.message
+          : 'Failed to upload images'
+      
+      const detailedMessage =
+        failedImageIndex !== null
+          ? `Failed to upload image ${failedImageIndex + 1} (${files[failedImageIndex]?.name}): ${errorMessage}`
+          : errorMessage
+
       set({
         uploadState: 'error',
         uploadProgress: null,
-        error: errorMessage,
+        error: detailedMessage,
       })
-      toast.error(errorMessage)
+      
+      toast.error(detailedMessage)
       throw error
     }
   },

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -9,6 +9,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
   type DragOverEvent,
+  type Modifier,
 } from '@dnd-kit/core'
 import {
   arrayMove,
@@ -32,6 +33,16 @@ interface ImageCarouselProps {
   images: ImageWithTitle[]
   onImagesChange: (images: ImageWithTitle[]) => void
   onTitleChange: (id: string, title: string) => void
+}
+
+/**
+ * Custom modifier to restrict dragging to horizontal axis only
+ */
+const restrictToHorizontalAxis: Modifier = ({ transform }) => {
+  return {
+    ...transform,
+    y: 0,
+  }
 }
 
 /**
@@ -63,14 +74,9 @@ const SortableImageItem = ({
   const isOver = over?.id === image.id
   const showDropZone = isReorderMode && dragOverId && dragOverId !== image.id && isOver
 
-  // Combine transform with scale for reorder mode
-  const scaleTransform = isReorderMode ? 'scale(0.35)' : ''
-  const combinedTransform = scaleTransform
-    ? `${scaleTransform} ${CSS.Transform.toString(transform)}`.trim()
-    : CSS.Transform.toString(transform)
-
+  // Apply drag transform (no scaling needed in reorder mode as we use fixed widths)
   const style = {
-    transform: combinedTransform || undefined,
+    transform: CSS.Transform.toString(transform) || undefined,
     transition: isReorderMode ? 'transform 0.3s ease' : transition,
     opacity: isDragging ? 0.5 : 1,
   }
@@ -80,9 +86,9 @@ const SortableImageItem = ({
       ref={setNodeRef}
       style={style}
       className={clsx(
-        'shrink-0 w-full transition-all duration-300 origin-center',
-        isReorderMode ? 'px-1' : 'px-4',
-        isActive && !isReorderMode && 'ring-2 ring-blue-500 rounded-lg'
+        'transition-all duration-300 origin-center flex flex-col items-center justify-center',
+        isReorderMode ? 'px-1 shrink-0 w-[80px] sm:w-[100px]' : 'w-full px-2 sm:px-4',
+        isActive && !isReorderMode
       )}
     >
       {/* Drop Zone Indicator */}
@@ -94,7 +100,8 @@ const SortableImageItem = ({
         {...attributes}
         {...listeners}
         className={clsx(
-          'relative aspect-square rounded-lg overflow-hidden bg-gray-100 border-2 transition-all duration-300',
+          'relative rounded-lg overflow-hidden bg-gray-100 border-2 transition-all duration-300',
+          isReorderMode ? 'w-full aspect-square' : 'w-full max-w-sm mx-auto h-[150px] sm:h-[180px] md:h-[200px]',
           isActive && !isReorderMode ? 'border-blue-500' : 'border-gray-200',
           isReorderMode && 'cursor-grab active:cursor-grabbing',
           isDragging && 'shadow-2xl z-30'
@@ -104,26 +111,37 @@ const SortableImageItem = ({
           src={image.preview}
           alt={image.file.name}
           className="w-full h-full object-cover pointer-events-none"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
       </div>
 
       {/* Title Input - Hidden in reorder mode */}
       {!isReorderMode && (
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div className="mt-2 sm:mt-3 w-full max-w-sm mx-auto shrink-0">
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-1.5">
             Image Title <span className="text-red-500">*</span>
           </label>
-          <input
-            type="text"
-            value={image.title}
-            onChange={(e) => onTitleChange(image.id, e.target.value)}
-            placeholder="Enter image title"
-            maxLength={200}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <p className="mt-1 text-xs text-gray-500">
+        <input
+          type="text"
+          value={image.title}
+          onChange={(e) => onTitleChange(image.id, e.target.value)}
+          placeholder="Enter image title"
+          maxLength={200}
+          className={clsx(
+            'w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors',
+            image.title.trim()
+              ? 'border-gray-300'
+              : 'border-red-300 focus:border-red-500 focus:ring-red-500'
+          )}
+        />
+        <div className="mt-1 flex items-center justify-between">
+          <p className="text-xs text-gray-500">
             {image.title.length}/200 characters
           </p>
+          {!image.title.trim() && (
+            <p className="text-xs text-red-500">Title required</p>
+          )}
+        </div>
         </div>
       )}
     </div>
@@ -142,8 +160,9 @@ export const ImageCarousel = ({
   const [activeIndex, setActiveIndex] = useState(0)
   const [isReorderMode, setIsReorderMode] = useState(false)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const isScrollingRef = useRef(false)
+  const [swipeOffset, setSwipeOffset] = useState(0)
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   // Sensors for drag and drop with 500ms press delay
   const sensors = useSensors(
@@ -165,41 +184,10 @@ export const ImageCarousel = ({
     const { active } = event
     setIsReorderMode(true)
 
-    // Center scroll on pressed image and show adjacent images
+    // Set active index to pressed image
     const pressedIndex = images.findIndex((img) => img.id === active.id)
     if (pressedIndex !== -1) {
       setActiveIndex(pressedIndex)
-      
-      // Wait for scale animation to complete (300ms) before calculating scroll
-      setTimeout(() => {
-        const container = scrollContainerRef.current
-        if (container) {
-          const pressedElement = container.querySelector(
-            `[data-image-index="${pressedIndex}"]`
-          ) as HTMLElement
-          
-          if (pressedElement) {
-            const containerRect = container.getBoundingClientRect()
-            const containerWidth = containerRect.width
-            
-            // Each image container is full width (w-full), so to show adjacent images:
-            // Scroll to center the pressed image's container, which will show adjacent containers
-            const pressedElementRect = pressedElement.getBoundingClientRect()
-            const scrollLeft = container.scrollLeft
-            const pressedElementLeft = pressedElementRect.left - containerRect.left + scrollLeft
-            const pressedElementWidth = pressedElementRect.width // This is the full container width
-            
-            // Center the pressed image's container in the viewport
-            // This ensures adjacent containers (with images) are visible
-            const targetScroll = pressedElementLeft - (containerWidth / 2) + (pressedElementWidth / 2)
-
-            container.scrollTo({
-              left: Math.max(0, targetScroll),
-              behavior: 'smooth',
-            })
-          }
-        }
-      }, 350) // Wait for scale animation (300ms) + small buffer
     }
   }
 
@@ -231,35 +219,6 @@ export const ImageCarousel = ({
     // Exit reorder mode
     setIsReorderMode(false)
     setDragOverId(null)
-
-    // Scroll to reordered image after zoom animation
-    setTimeout(() => {
-      const container = scrollContainerRef.current
-      if (container) {
-        const targetIndex = over && active.id !== over.id
-          ? images.findIndex((img) => img.id === over.id)
-          : activeIndex
-
-        const activeElement = container.querySelector(
-          `[data-image-index="${targetIndex}"]`
-        ) as HTMLElement
-
-        if (activeElement) {
-          const containerRect = container.getBoundingClientRect()
-          const elementRect = activeElement.getBoundingClientRect()
-          const scrollLeft = container.scrollLeft
-          const elementLeft = elementRect.left - containerRect.left + scrollLeft
-          const elementWidth = elementRect.width
-          const containerWidth = containerRect.width
-          const targetScroll = elementLeft - (containerWidth / 2) + (elementWidth / 2)
-
-          container.scrollTo({
-            left: targetScroll,
-            behavior: 'smooth',
-          })
-        }
-      }
-    }, 300) // Wait for zoom animation
   }
 
   /**
@@ -274,14 +233,22 @@ export const ImageCarousel = ({
    * Navigate to previous image
    */
   const goToPrevious = () => {
-    setActiveIndex((prev) => Math.max(0, prev - 1))
+    setActiveIndex((prev) => {
+      const newIndex = Math.max(0, prev - 1)
+      setSwipeOffset(0)
+      return newIndex
+    })
   }
 
   /**
    * Navigate to next image
    */
   const goToNext = () => {
-    setActiveIndex((prev) => Math.min(images.length - 1, prev + 1))
+    setActiveIndex((prev) => {
+      const newIndex = Math.min(images.length - 1, prev + 1)
+      setSwipeOffset(0)
+      return newIndex
+    })
   }
 
   /**
@@ -289,44 +256,150 @@ export const ImageCarousel = ({
    */
   const goToImage = (index: number) => {
     setActiveIndex(index)
+    setSwipeOffset(0)
   }
 
+  /**
+   * Handle touch start for swipe detection
+   */
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isReorderMode) return
+    // Don't start swipe if touching an input element
+    const target = e.target as HTMLElement
+    if (target.tagName === 'INPUT' || target.closest('input')) return
+    
+    const touch = e.touches[0]
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY }
+  }, [isReorderMode])
 
   /**
-   * Scroll to active image (only when not in reorder mode)
+   * Handle touch move for swipe detection
    */
-  useEffect(() => {
-    if (isReorderMode) return
-
-    const container = scrollContainerRef.current
-    if (!container) return
-
-    const activeElement = container.querySelector(
-      `[data-image-index="${activeIndex}"]`
-    ) as HTMLElement
-
-    if (activeElement) {
-      isScrollingRef.current = true
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (isReorderMode || !touchStartRef.current) return
+    
+    const touch = e.touches[0]
+    const deltaX = touch.clientX - touchStartRef.current.x
+    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y)
+    
+    // Only process horizontal swipes (deltaX > deltaY)
+    if (Math.abs(deltaX) > deltaY && Math.abs(deltaX) > 10) {
+      e.preventDefault()
       
-      const containerRect = container.getBoundingClientRect()
-      const elementRect = activeElement.getBoundingClientRect()
-      const scrollLeft = container.scrollLeft
-      const elementLeft = elementRect.left - containerRect.left + scrollLeft
-      const elementWidth = elementRect.width
-      const containerWidth = containerRect.width
-      const targetScroll = elementLeft - (containerWidth / 2) + (elementWidth / 2)
-
-      container.scrollTo({
-        left: targetScroll,
-        behavior: 'smooth',
-      })
-
-      // Reset scrolling flag after animation completes
-      setTimeout(() => {
-        isScrollingRef.current = false
-      }, 500)
+      // Calculate offset relative to container width
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.clientWidth
+        const offset = (deltaX / containerWidth) * 100
+        setSwipeOffset(offset)
+      }
     }
-  }, [activeIndex, isReorderMode])
+  }, [isReorderMode])
+
+  /**
+   * Handle touch end for swipe detection
+   */
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (isReorderMode || !touchStartRef.current) {
+      touchStartRef.current = null
+      return
+    }
+
+    const touch = e.changedTouches[0]
+    const deltaX = touch.clientX - touchStartRef.current.x
+    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y)
+    const swipeThreshold = 50 // Minimum swipe distance in pixels
+
+    touchStartRef.current = null
+
+    // Only process horizontal swipes
+    if (Math.abs(deltaX) > deltaY && Math.abs(deltaX) > swipeThreshold) {
+      if (deltaX > 0 && activeIndex > 0) {
+        // Swipe right - go to previous
+        setActiveIndex((prev) => Math.max(0, prev - 1))
+        setSwipeOffset(0)
+      } else if (deltaX < 0 && activeIndex < images.length - 1) {
+        // Swipe left - go to next
+        setActiveIndex((prev) => Math.min(images.length - 1, prev + 1))
+        setSwipeOffset(0)
+      } else {
+        setSwipeOffset(0)
+      }
+    } else {
+      setSwipeOffset(0)
+    }
+  }, [isReorderMode, activeIndex, images.length])
+
+  /**
+   * Handle mouse down for drag detection
+   */
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (isReorderMode) return
+    // Don't start swipe if clicking on an input element
+    const target = e.target as HTMLElement
+    if (target.tagName === 'INPUT' || target.closest('input')) return
+    
+    touchStartRef.current = { x: e.clientX, y: e.clientY }
+  }, [isReorderMode])
+
+  /**
+   * Handle mouse move for drag detection
+   */
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isReorderMode || !touchStartRef.current) return
+    
+    const deltaX = e.clientX - touchStartRef.current.x
+    const deltaY = Math.abs(e.clientY - touchStartRef.current.y)
+    
+    // Only process horizontal drags
+    if (Math.abs(deltaX) > deltaY && Math.abs(deltaX) > 10) {
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.clientWidth
+        const offset = (deltaX / containerWidth) * 100
+        setSwipeOffset(offset)
+      }
+    }
+  }, [isReorderMode])
+
+  /**
+   * Handle mouse up for drag detection
+   */
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    if (isReorderMode || !touchStartRef.current) {
+      touchStartRef.current = null
+      return
+    }
+
+    const deltaX = e.clientX - touchStartRef.current.x
+    const deltaY = Math.abs(e.clientY - touchStartRef.current.y)
+    const swipeThreshold = 50
+
+    touchStartRef.current = null
+
+    // Only process horizontal drags
+    if (Math.abs(deltaX) > deltaY && Math.abs(deltaX) > swipeThreshold) {
+      if (deltaX > 0 && activeIndex > 0) {
+        setActiveIndex((prev) => Math.max(0, prev - 1))
+        setSwipeOffset(0)
+      } else if (deltaX < 0 && activeIndex < images.length - 1) {
+        setActiveIndex((prev) => Math.min(images.length - 1, prev + 1))
+        setSwipeOffset(0)
+      } else {
+        setSwipeOffset(0)
+      }
+    } else {
+      setSwipeOffset(0)
+    }
+  }, [isReorderMode, activeIndex, images.length])
+
+  /**
+   * Handle mouse leave to reset swipe
+   */
+  const handleMouseLeave = useCallback(() => {
+    touchStartRef.current = null
+    setSwipeOffset(0)
+  }, [])
+
+
 
   if (images.length === 0) {
     return null
@@ -336,14 +409,15 @@ export const ImageCarousel = ({
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
+      modifiers={[restrictToHorizontalAxis]}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className="space-y-4">
+      <div className="flex flex-col flex-1 min-h-0 space-y-2 sm:space-y-3">
         {/* Image Display Area */}
-        <div className="relative">
+        <div className="relative flex-1 min-h-0 flex flex-col">
           {/* Navigation Buttons - Hidden in reorder mode */}
           {images.length > 1 && !isReorderMode && (
             <>
@@ -351,86 +425,66 @@ export const ImageCarousel = ({
                 onClick={goToPrevious}
                 disabled={activeIndex === 0}
                 className={clsx(
-                  'absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-2 shadow-lg transition-all',
+                  'absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-1.5 sm:p-2 shadow-lg transition-all',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
                   'focus:outline-none focus:ring-2 focus:ring-blue-500'
                 )}
                 aria-label="Previous image"
               >
-                <HiChevronLeft className="h-6 w-6 text-gray-700" />
+                <HiChevronLeft className="h-5 w-5 sm:h-6 sm:w-6 text-gray-700" />
               </button>
               <button
                 onClick={goToNext}
                 disabled={activeIndex === images.length - 1}
                 className={clsx(
-                  'absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-2 shadow-lg transition-all',
+                  'absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-1.5 sm:p-2 shadow-lg transition-all',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
                   'focus:outline-none focus:ring-2 focus:ring-blue-500'
                 )}
                 aria-label="Next image"
               >
-                <HiChevronRight className="h-6 w-6 text-gray-700" />
+                <HiChevronRight className="h-5 w-5 sm:h-6 sm:w-6 text-gray-700" />
               </button>
             </>
           )}
 
-          {/* Scrollable Container */}
-          <div
-            ref={scrollContainerRef}
+          {/* Image Container - Shows all images in reorder mode, single image otherwise */}
+          <div 
+            ref={containerRef}
             className={clsx(
-              'overflow-x-auto scrollbar-hide transition-all duration-300',
-              isReorderMode ? '' : 'snap-x snap-mandatory'
+              'flex-1 min-h-0 flex items-center relative',
+              isReorderMode 
+                ? 'overflow-x-auto overflow-y-hidden' 
+                : 'justify-center overflow-hidden'
             )}
-            style={{
-              scrollbarWidth: 'none',
-              msOverflowStyle: 'none',
-              WebkitOverflowScrolling: 'touch',
-            }}
-            onScroll={(e) => {
-              // Update active index based on scroll position (only when not in reorder mode and not programmatically scrolling)
-              if (!isReorderMode && !isScrollingRef.current) {
-                const container = e.currentTarget
-                const containerWidth = container.clientWidth
-                
-                // Find which image is closest to center
-                let closestIndex = 0
-                let closestDistance = Infinity
-                
-                images.forEach((_, index) => {
-                  const element = container.querySelector(
-                    `[data-image-index="${index}"]`
-                  ) as HTMLElement
-                  
-                  if (element) {
-                    const elementRect = element.getBoundingClientRect()
-                    const containerRect = container.getBoundingClientRect()
-                    const elementCenter = elementRect.left - containerRect.left + (elementRect.width / 2)
-                    const containerCenter = containerWidth / 2
-                    const distance = Math.abs(elementCenter - containerCenter)
-                    
-                    if (distance < closestDistance) {
-                      closestDistance = distance
-                      closestIndex = index
-                    }
-                  }
-                })
-                
-                if (closestIndex !== activeIndex && closestIndex >= 0 && closestIndex < images.length) {
-                  setActiveIndex(closestIndex)
-                }
-              }
-            }}
+            onTouchStart={!isReorderMode ? handleTouchStart : undefined}
+            onTouchMove={!isReorderMode ? handleTouchMove : undefined}
+            onTouchEnd={!isReorderMode ? handleTouchEnd : undefined}
+            onMouseDown={!isReorderMode ? handleMouseDown : undefined}
+            onMouseMove={!isReorderMode ? handleMouseMove : undefined}
+            onMouseUp={!isReorderMode ? handleMouseUp : undefined}
+            onMouseLeave={!isReorderMode ? handleMouseLeave : undefined}
           >
             <SortableContext
               items={images.map((img) => img.id)}
               strategy={horizontalListSortingStrategy}
             >
-              <div className="flex">
+              <div 
+                className={clsx(
+                  'flex relative transition-transform duration-300 ease-out',
+                  isReorderMode ? 'gap-2 px-2' : 'w-full h-full'
+                )}
+                style={!isReorderMode ? {
+                  transform: `translateX(${-activeIndex * 100 + (swipeOffset / 100) * 100}%)`,
+                } : undefined}
+              >
                 {images.map((image, index) => (
                   <div
                     key={image.id}
                     data-image-index={index}
-                    className="shrink-0 w-full snap-center"
+                    className={clsx(
+                      isReorderMode ? 'shrink-0' : 'w-full h-full shrink-0'
+                    )}
                   >
                     <SortableImageItem
                       image={image}
@@ -448,15 +502,15 @@ export const ImageCarousel = ({
 
         {/* Dots Indicator - Hidden in reorder mode */}
         {images.length > 1 && !isReorderMode && (
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-1 sm:gap-1.5 mt-2 sm:mt-3">
             {images.map((_, index) => (
               <button
                 key={index}
                 onClick={() => goToImage(index)}
                 className={clsx(
-                  'w-2 h-2 rounded-full transition-all',
+                  'w-1.5 h-1.5 rounded-full transition-all',
                   index === activeIndex
-                    ? 'bg-blue-600 w-8'
+                    ? 'bg-blue-600 w-5'
                     : 'bg-gray-300 hover:bg-gray-400'
                 )}
                 aria-label={`Go to image ${index + 1}`}
@@ -467,7 +521,7 @@ export const ImageCarousel = ({
 
         {/* Image Counter - Hidden in reorder mode */}
         {!isReorderMode && (
-          <div className="text-center text-sm text-gray-500">
+          <div className="text-center text-xs text-gray-500">
             Image {activeIndex + 1} of {images.length}
           </div>
         )}

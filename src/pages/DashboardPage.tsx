@@ -3,56 +3,39 @@ import { useImageStore } from '@/store'
 import { Navbar, UploadProgressBar } from '@/components/common'
 import { ImageCard, ImageCardPlaceholder, UploadModal } from '@/components/images'
 
-/**
- * Dashboard Page (Protected)
- */
 export const DashboardPage = () => {
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
 
-  const {
-    images,
-    isLoading,
-    fetchImages,
-    uploadState,
-    uploadProgress,
-  } = useImageStore()
+  const { images, isLoading, fetchImages, uploadState, uploadProgress } = useImageStore()
 
-  // Fetch images on mount
   useEffect(() => {
     fetchImages()
   }, [fetchImages])
 
-  // Refresh images after successful upload
   useEffect(() => {
     if (uploadState === 'success') {
       fetchImages()
     }
   }, [uploadState, fetchImages])
 
-  /**
-   * Handle file selection from upload modal
-   */
   const handleFilesSelected = (files: File[]) => {
     setSelectedFiles(files)
-    // Modal will be kept open for title input (Phase 4)
-    // For now, we'll close it and files will be handled in next phase
   }
 
-  /**
-   * Handle upload modal close
-   */
-  const handleCloseModal = () => {
-    setIsUploadModalOpen(false)
-    setSelectedFiles([])
-  }
-
-  /**
-   * Handle upload start - close modal to show progress bar
-   */
   const handleUploadStart = () => {
-    setIsUploadModalOpen(false)
+    setIsModalOpen(false)
   }
+
+  const handleModalClose = () => {
+    setIsModalOpen(false)
+    if (uploadState === 'success' || uploadState === 'idle') {
+      setSelectedFiles([])
+    }
+  }
+
+  // Derive modal open state - open if user opened it or if upload failed with files
+  const shouldShowModal = isModalOpen || (uploadState === 'error' && selectedFiles.length > 0)
 
   return (
     <div className="min-h-screen">
@@ -78,42 +61,30 @@ export const DashboardPage = () => {
               </p>
             </div>
 
-            {/* Image Gallery */}
             {isLoading ? (
               <div className="text-center py-12">
                 <p className="text-white/60">Loading images...</p>
               </div>
+            ) : images.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-white/60 mb-4">No images yet</p>
+                <p className="text-white/40 text-sm">Click the upload button to get started</p>
+              </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {/* Upload Placeholder */}
-                <ImageCardPlaceholder
-                  onClick={() => setIsUploadModalOpen(true)}
-                />
-
-                {/* Image Cards */}
+                <ImageCardPlaceholder onClick={() => setIsModalOpen(true)} />
                 {images.map((image) => (
                   <ImageCard key={image.id} image={image} />
                 ))}
-              </div>
-            )}
-
-            {/* Empty State */}
-            {!isLoading && images.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-white/60 mb-4">No images yet</p>
-                <p className="text-white/40 text-sm">
-                  Click the upload button to get started
-                </p>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Upload Modal */}
       <UploadModal
-        isOpen={isUploadModalOpen}
-        onClose={handleCloseModal}
+        isOpen={shouldShowModal}
+        onClose={handleModalClose}
         onFilesSelected={handleFilesSelected}
         selectedFiles={selectedFiles}
         onUploadStart={handleUploadStart}
