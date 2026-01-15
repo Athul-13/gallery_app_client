@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 import { HiX, HiPhotograph } from 'react-icons/hi'
 import toast from 'react-hot-toast'
-import { ImageCarousel } from './ImageCarousel'
+import { ImageCarousel, type ImageCarouselRef } from './ImageCarousel'
 import { ConfirmDialog } from '@/components/common'
 import { useImageStore } from '@/store'
 
@@ -45,6 +45,7 @@ export const UploadModal = ({
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const prevImagesRef = useRef<ImageWithTitle[]>([])
+  const carouselRef = useRef<ImageCarouselRef | null>(null)
 
   const uploadBulkImages = useImageStore((state) => state.uploadBulkImages)
   const uploadImage = useImageStore((state) => state.uploadImage)
@@ -378,6 +379,39 @@ export const UploadModal = ({
     }
   }, [isOpen, isUploading, cleanupOldUrls])
 
+  /**
+   * Keyboard shortcuts for image navigation
+   * Shift + Arrow Right: Next image
+   * Shift + Arrow Left: Previous image
+   */
+  useEffect(() => {
+    if (!isOpen || imagesWithTitles.length <= 1 || isUploading) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if Shift is pressed and user is not typing in an input
+      if (!e.shiftKey) return
+      
+      const target = e.target as HTMLElement
+      // Don't trigger if user is typing in an input field
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
+      if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        carouselRef.current?.goToNext()
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        carouselRef.current?.goToPrevious()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, imagesWithTitles.length, isUploading])
+
   return (
     <>
       <Dialog open={isOpen} onClose={handleCloseClick} className="relative z-50">
@@ -464,6 +498,7 @@ export const UploadModal = ({
                 </div>
                 <div className="flex-1 min-h-0 flex flex-col">
                   <ImageCarousel
+                    ref={carouselRef}
                     images={imagesWithTitles}
                     onImagesChange={handleImagesChange}
                     onTitleChange={handleTitleChange}

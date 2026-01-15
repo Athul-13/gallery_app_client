@@ -18,6 +18,7 @@ interface ImageState {
   page: number
   limit: number
   isLoading: boolean
+  isLoadingMore: boolean
   error: string | null
   
   // Upload state
@@ -34,7 +35,7 @@ interface ImageState {
  */
 interface ImageActions {
   // Image operations
-  fetchImages: (options?: { page?: number; limit?: number }) => Promise<void>
+  fetchImages: (options?: { page?: number; limit?: number; append?: boolean }) => Promise<void>
   uploadImage: (file: File, title: string) => Promise<void>
   uploadBulkImages: (files: File[], titles: string[]) => Promise<void>
   getImageById: (id: string) => Promise<Image | null>
@@ -69,6 +70,7 @@ const initialState: ImageState = {
   page: 1,
   limit: 20,
   isLoading: false,
+  isLoadingMore: false,
   error: null,
   uploadState: 'idle',
   uploadProgress: null,
@@ -84,28 +86,62 @@ export const useImageStore = create<ImageStore>((set, get) => ({
 
   /**
    * Fetch all images for authenticated user
+   * @param options - Pagination options and append flag
+   * @param options.page - Page number (default: 1)
+   * @param options.limit - Number of images per page (default: 20)
+   * @param options.append - Whether to append to existing images (default: false)
    */
-  fetchImages: async (options?: { page?: number; limit?: number }) => {
-    set({ isLoading: true, error: null })
+  fetchImages: async (options?: { page?: number; limit?: number; append?: boolean }) => {
+    const { append = false } = options || {}
+    
+    // Set appropriate loading state
+    if (append) {
+      set({ isLoadingMore: true, error: null })
+    } else {
+      set({ isLoading: true, error: null })
+    }
 
     try {
       const result = await imageService.getUserImages(options)
 
-      set({
-        images: result.images,
-        total: result.total,
-        page: result.page,
-        limit: result.limit,
-        isLoading: false,
-        error: null,
-      })
+      if (append) {
+        // Append new images to existing ones
+        set((state) => ({
+          images: [...state.images, ...result.images],
+          total: result.total,
+          page: result.page,
+          limit: result.limit,
+          isLoadingMore: false,
+          error: null,
+        }))
+      } else {
+        // Replace all images (initial load or refresh)
+        set({
+          images: result.images,
+          total: result.total,
+          page: result.page,
+          limit: result.limit,
+          isLoading: false,
+          isLoadingMore: false,
+          error: null,
+        })
+      }
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to fetch images'
-      set({
-        isLoading: false,
-        error: errorMessage,
-      })
+      
+      if (append) {
+        set({
+          isLoadingMore: false,
+          error: errorMessage,
+        })
+      } else {
+        set({
+          isLoading: false,
+          error: errorMessage,
+        })
+      }
+      
       toast.error(errorMessage)
       throw error
     }

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, memo } from 'react'
+import { useState, useRef, useCallback, memo, useImperativeHandle, forwardRef } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -33,6 +33,11 @@ interface ImageCarouselProps {
   images: ImageWithTitle[]
   onImagesChange: (images: ImageWithTitle[]) => void
   onTitleChange: (id: string, title: string) => void
+}
+
+export interface ImageCarouselRef {
+  goToNext: () => void
+  goToPrevious: () => void
 }
 
 /**
@@ -158,11 +163,11 @@ SortableImageItem.displayName = 'SortableImageItem'
  * Image Carousel Component
  * Horizontal scrollable carousel with drag-to-reorder functionality
  */
-export const ImageCarousel = ({
+export const ImageCarousel = forwardRef<ImageCarouselRef, ImageCarouselProps>(({
   images,
   onImagesChange,
   onTitleChange,
-}: ImageCarouselProps) => {
+}, ref) => {
   const [activeIndex, setActiveIndex] = useState(0)
   const [isReorderMode, setIsReorderMode] = useState(false)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
@@ -238,24 +243,24 @@ export const ImageCarousel = ({
   /**
    * Navigate to previous image
    */
-  const goToPrevious = () => {
+  const goToPrevious = useCallback(() => {
     setActiveIndex((prev) => {
       const newIndex = Math.max(0, prev - 1)
       setSwipeOffset(0)
       return newIndex
     })
-  }
+  }, [])
 
   /**
    * Navigate to next image
    */
-  const goToNext = () => {
+  const goToNext = useCallback(() => {
     setActiveIndex((prev) => {
       const newIndex = Math.min(images.length - 1, prev + 1)
       setSwipeOffset(0)
       return newIndex
     })
-  }
+  }, [images.length])
 
   /**
    * Navigate to specific image
@@ -264,6 +269,14 @@ export const ImageCarousel = ({
     setActiveIndex(index)
     setSwipeOffset(0)
   }
+
+  /**
+   * Expose navigation methods via ref
+   */
+  useImperativeHandle(ref, () => ({
+    goToNext,
+    goToPrevious,
+  }), [goToNext, goToPrevious])
 
   /**
    * Handle touch start for swipe detection
@@ -534,4 +547,6 @@ export const ImageCarousel = ({
       </div>
     </DndContext>
   )
-}
+})
+
+ImageCarousel.displayName = 'ImageCarousel'
