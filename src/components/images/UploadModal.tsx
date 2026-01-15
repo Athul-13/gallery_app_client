@@ -46,7 +46,8 @@ export const UploadModal = ({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const prevImagesRef = useRef<ImageWithTitle[]>([])
 
-  const { uploadBulkImages, uploadImage } = useImageStore()
+  const uploadBulkImages = useImageStore((state) => state.uploadBulkImages)
+  const uploadImage = useImageStore((state) => state.uploadImage)
 
   /**
    * Cleanup function to revoke object URLs
@@ -241,7 +242,7 @@ export const UploadModal = ({
    */
   const handleTitleChange = (id: string, title: string) => {
     setImagesWithTitles((prev) => {
-      const updated = prev.map((img) => (img.id === id ? { ...img, title: title.trim() } : img))
+      const updated = prev.map((img) => (img.id === id ? { ...img, title: title } : img))
       prevImagesRef.current = updated
       return updated
     })
@@ -385,16 +386,16 @@ export const UploadModal = ({
 
         {/* Modal */}
         <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4">
-          <DialogPanel className="mx-auto w-full max-w-md h-[85vh] sm:h-[80vh] max-h-[700px] flex flex-col rounded-lg bg-white shadow-xl overflow-hidden">
+          <DialogPanel className="mx-auto w-full max-w-md h-[85vh] sm:h-[80vh] max-h-[700px] flex flex-col rounded-lg bg-white/5 backdrop-blur-md border border-white/10 shadow-xl overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 shrink-0">
-              <DialogTitle className="text-base sm:text-lg font-semibold text-gray-900">
+            <div className="flex items-center justify-between p-3 sm:p-4 border-b border-white/10 shrink-0">
+              <DialogTitle className="text-base sm:text-lg font-semibold text-white">
                 Upload Images
               </DialogTitle>
               <button
                 onClick={handleCloseClick}
                 disabled={isUploading}
-                className="text-gray-400 hover:text-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-white/60 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white/50 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label="Close"
               >
                 <HiX className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -415,8 +416,8 @@ export const UploadModal = ({
                   relative border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors
                   ${
                     dragActive
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-300 hover:border-gray-400 bg-gray-50'
+                      ? 'border-blue-500/80 bg-blue-500/10'
+                      : 'border-white/20 hover:border-white/30 bg-white/5'
                   }
                 `}
               >
@@ -431,17 +432,17 @@ export const UploadModal = ({
                 />
 
                 <div className="flex flex-col items-center gap-4">
-                  <div className="rounded-full bg-gray-100 p-4">
-                    <HiPhotograph className="h-12 w-12 text-gray-400" />
+                  <div className="rounded-full bg-white/10 p-4">
+                    <HiPhotograph className="h-12 w-12 text-white/60" />
                   </div>
                   <div>
-                    <p className="text-lg font-medium text-gray-900">
+                    <p className="text-lg font-medium text-white">
                       Click to upload or drag and drop
                     </p>
-                    <p className="mt-2 text-sm text-gray-500">
+                    <p className="mt-2 text-sm text-white/60">
                       PNG, JPG, GIF, WebP up to 5MB each
                     </p>
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="mt-1 text-sm text-white/60">
                       Maximum {MAX_FILES} images
                     </p>
                   </div>
@@ -451,12 +452,12 @@ export const UploadModal = ({
               /* Carousel with Title Input */
               <div className="flex flex-col flex-1 min-h-0 space-y-2 sm:space-y-3">
                 <div className="flex items-center justify-between shrink-0">
-                  <p className="text-xs font-medium text-gray-700">
+                  <p className="text-xs font-medium text-white/80">
                     {imagesWithTitles.length} image{imagesWithTitles.length > 1 ? 's' : ''} selected
                   </p>
                   <button
                     onClick={handleClick}
-                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                    className="text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors"
                   >
                     Add More
                   </button>
@@ -480,7 +481,7 @@ export const UploadModal = ({
                 />
 
                 {/* Upload Button */}
-                <div className="pt-2 sm:pt-3 border-t border-gray-200 shrink-0">
+                <div className="pt-2 sm:pt-3 border-t border-white/10 shrink-0">
                   <button
                     onClick={handleUpload}
                     disabled={!areAllTitlesValid || isUploading || imagesWithTitles.length === 0}
@@ -490,8 +491,8 @@ export const UploadModal = ({
                       focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
                       ${
                         areAllTitlesValid && !isUploading && imagesWithTitles.length > 0
-                          ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
-                          : 'bg-gray-400 cursor-not-allowed'
+                          ? 'bg-blue-600/80 hover:bg-blue-600 active:bg-blue-700'
+                          : 'bg-white/10 cursor-not-allowed'
                       }
                     `}
                   >
@@ -524,7 +525,7 @@ export const UploadModal = ({
                     )}
                   </button>
                   {!areAllTitlesValid && imagesWithTitles.length > 0 && (
-                    <p className="mt-2 text-xs sm:text-sm text-red-600 text-center">
+                    <p className="mt-2 text-xs sm:text-sm text-red-400 text-center">
                       Please add valid titles to all images before uploading
                     </p>
                   )}

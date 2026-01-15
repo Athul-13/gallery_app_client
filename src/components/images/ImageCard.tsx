@@ -1,3 +1,4 @@
+import { memo, useCallback } from 'react'
 import type { Image } from '@/types'
 import clsx from 'clsx'
 
@@ -11,7 +12,12 @@ interface ImageCardProps {
  * Image Card Component
  * Displays an image with its title
  */
-export const ImageCard = ({ image, onClick, className }: ImageCardProps) => {
+export const ImageCard = memo(({ image, onClick, className }: ImageCardProps) => {
+  const handleError = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    console.error('Image failed to load:', image.url)
+    e.currentTarget.style.display = 'none'
+  }, [image.url])
+
   return (
     <div
       className={clsx(
@@ -27,10 +33,7 @@ export const ImageCard = ({ image, onClick, className }: ImageCardProps) => {
         className="absolute inset-0 w-full h-full object-cover transition-transform group-hover:scale-105"
         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         loading="lazy"
-        onError={(e) => {
-          console.error('Image failed to load:', image.url)
-          e.currentTarget.style.display = 'none'
-        }}
+        onError={handleError}
       />
 
       {/* Title overlay */}
@@ -39,4 +42,6 @@ export const ImageCard = ({ image, onClick, className }: ImageCardProps) => {
       </div>
     </div>
   )
-}
+})
+
+ImageCard.displayName = 'ImageCard'

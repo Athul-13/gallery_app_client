@@ -1,41 +1,96 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useImageStore } from '@/store'
 import { Navbar, UploadProgressBar } from '@/components/common'
-import { ImageCard, ImageCardPlaceholder, UploadModal } from '@/components/images'
+import { ImageCard, ImageCardPlaceholder, UploadModal, ImageLightbox } from '@/components/images'
 
 export const DashboardPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
-  const { images, isLoading, fetchImages, uploadState, uploadProgress } = useImageStore()
+  const images = useImageStore((state) => state.images)
+  const isLoading = useImageStore((state) => state.isLoading)
+  const fetchImages = useImageStore((state) => state.fetchImages)
+  const uploadState = useImageStore((state) => state.uploadState)
+  const uploadProgress = useImageStore((state) => state.uploadProgress)
 
+  // Fetch images on mount - Zustand actions are stable, so we can safely omit from deps
   useEffect(() => {
     fetchImages()
-  }, [fetchImages])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (uploadState === 'success') {
       fetchImages()
     }
-  }, [uploadState, fetchImages])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploadState])
 
-  const handleFilesSelected = (files: File[]) => {
+  const handleFilesSelected = useCallback((files: File[]) => {
     setSelectedFiles(files)
-  }
+  }, [])
 
-  const handleUploadStart = () => {
+  const handleUploadStart = useCallback(() => {
     setIsModalOpen(false)
-  }
+  }, [])
 
-  const handleModalClose = () => {
+  const handleModalClose = useCallback(() => {
     setIsModalOpen(false)
-    if (uploadState === 'success' || uploadState === 'idle') {
+    // Check uploadState from store - if success or idle, clear selected files
+    const currentUploadState = useImageStore.getState().uploadState
+    if (currentUploadState === 'success' || currentUploadState === 'idle') {
       setSelectedFiles([])
     }
-  }
+  }, [])
 
   // Derive modal open state - open if user opened it or if upload failed with files
   const shouldShowModal = isModalOpen || (uploadState === 'error' && selectedFiles.length > 0)
+
+  /**
+   * Handle image card click - open lightbox
+   */
+  const handleImageClick = useCallback((index: number) => {
+    setLightboxIndex(index)
+  }, [])
+
+  /**
+   * Handle modal open
+   */
+  const handleModalOpen = useCallback(() => {
+    setIsModalOpen(true)
+  }, [])
+
+  /**
+   * Handle lightbox close
+   */
+  const handleLightboxClose = useCallback(() => {
+    setLightboxIndex(null)
+  }, [])
+
+  /**
+   * Navigate to previous image in lightbox
+   */
+  const handleLightboxPrevious = useCallback(() => {
+    setLightboxIndex((prev) => {
+      if (prev !== null && prev > 0) {
+        return prev - 1
+      }
+      return prev
+    })
+  }, [])
+
+  /**
+   * Navigate to next image in lightbox
+   */
+  const handleLightboxNext = useCallback(() => {
+    setLightboxIndex((prev) => {
+      if (prev !== null && prev < images.length - 1) {
+        return prev + 1
+      }
+      return prev
+    })
+  }, [images.length])
 
   return (
     <div className="min-h-screen">
@@ -72,9 +127,13 @@ export const DashboardPage = () => {
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                <ImageCardPlaceholder onClick={() => setIsModalOpen(true)} />
-                {images.map((image) => (
-                  <ImageCard key={image.id} image={image} />
+                <ImageCardPlaceholder onClick={handleModalOpen} />
+                {images.map((image, index) => (
+                  <ImageCard
+                    key={image.id}
+                    image={image}
+                    onClick={() => handleImageClick(index)}
+                  />
                 ))}
               </div>
             )}
@@ -89,6 +148,18 @@ export const DashboardPage = () => {
         selectedFiles={selectedFiles}
         onUploadStart={handleUploadStart}
       />
+
+      {/* Image Lightbox */}
+      {lightboxIndex !== null && images.length > 0 && (
+        <ImageLightbox
+          images={images}
+          currentIndex={lightboxIndex}
+          isOpen={lightboxIndex !== null}
+          onClose={handleLightboxClose}
+          onPrevious={handleLightboxPrevious}
+          onNext={handleLightboxNext}
+        />
+      )}
     </div>
   )
 }

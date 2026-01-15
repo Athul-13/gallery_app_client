@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, memo } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -48,7 +48,7 @@ const restrictToHorizontalAxis: Modifier = ({ transform }) => {
 /**
  * Sortable Image Item Component
  */
-const SortableImageItem = ({
+const SortableImageItem = memo(({
   image,
   isActive,
   isReorderMode,
@@ -81,6 +81,10 @@ const SortableImageItem = ({
     opacity: isDragging ? 0.5 : 1,
   }
 
+  const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    onTitleChange(image.id, e.target.value)
+  }, [image.id, onTitleChange])
+
   return (
     <div
       ref={setNodeRef}
@@ -100,9 +104,9 @@ const SortableImageItem = ({
         {...attributes}
         {...listeners}
         className={clsx(
-          'relative rounded-lg overflow-hidden bg-gray-100 border-2 transition-all duration-300',
+          'relative rounded-lg overflow-hidden bg-white/5 border-2 transition-all duration-300',
           isReorderMode ? 'w-full aspect-square' : 'w-full max-w-sm mx-auto h-[150px] sm:h-[180px] md:h-[200px]',
-          isActive && !isReorderMode ? 'border-blue-500' : 'border-gray-200',
+          isActive && !isReorderMode ? 'border-blue-500/80' : 'border-white/10',
           isReorderMode && 'cursor-grab active:cursor-grabbing',
           isDragging && 'shadow-2xl z-30'
         )}
@@ -118,35 +122,37 @@ const SortableImageItem = ({
       {/* Title Input - Hidden in reorder mode */}
       {!isReorderMode && (
         <div className="mt-2 sm:mt-3 w-full max-w-sm mx-auto shrink-0">
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-1.5">
-            Image Title <span className="text-red-500">*</span>
-          </label>
-        <input
-          type="text"
-          value={image.title}
-          onChange={(e) => onTitleChange(image.id, e.target.value)}
-          placeholder="Enter image title"
-          maxLength={200}
-          className={clsx(
-            'w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors',
-            image.title.trim()
-              ? 'border-gray-300'
-              : 'border-red-300 focus:border-red-500 focus:ring-red-500'
-          )}
-        />
-        <div className="mt-1 flex items-center justify-between">
-          <p className="text-xs text-gray-500">
-            {image.title.length}/200 characters
-          </p>
-          {!image.title.trim() && (
-            <p className="text-xs text-red-500">Title required</p>
-          )}
-        </div>
-        </div>
+        <label className="block text-xs sm:text-sm font-medium text-white/80 mb-1 sm:mb-1.5">
+          Image Title <span className="text-red-400">*</span>
+        </label>
+      <input
+        type="text"
+        value={image.title}
+        onChange={handleTitleChange}
+        placeholder="Enter image title"
+        maxLength={200}
+        className={clsx(
+          'w-full px-3 py-2 border rounded-md bg-white/5 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-colors',
+          image.title.trim()
+            ? 'border-white/20'
+            : 'border-red-400/50 focus:border-red-400 focus:ring-red-400/50'
+        )}
+      />
+      <div className="mt-1 flex items-center justify-between">
+        <p className="text-xs text-white/60">
+          {image.title.length}/200 characters
+        </p>
+        {!image.title.trim() && (
+          <p className="text-xs text-red-400">Title required</p>
+        )}
+      </div>
+      </div>
       )}
     </div>
   )
-}
+})
+
+SortableImageItem.displayName = 'SortableImageItem'
 
 /**
  * Image Carousel Component
@@ -425,25 +431,25 @@ export const ImageCarousel = ({
                 onClick={goToPrevious}
                 disabled={activeIndex === 0}
                 className={clsx(
-                  'absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-1.5 sm:p-2 shadow-lg transition-all',
+                  'absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-10 bg-white/10 hover:bg-white/20 rounded-full p-1.5 sm:p-2 shadow-lg transition-all',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
                   'focus:outline-none focus:ring-2 focus:ring-blue-500'
                 )}
                 aria-label="Previous image"
               >
-                <HiChevronLeft className="h-5 w-5 sm:h-6 sm:w-6 text-gray-700" />
+                <HiChevronLeft className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </button>
               <button
                 onClick={goToNext}
                 disabled={activeIndex === images.length - 1}
                 className={clsx(
-                  'absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-1.5 sm:p-2 shadow-lg transition-all',
+                  'absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-10 bg-white/10 hover:bg-white/20 rounded-full p-1.5 sm:p-2 shadow-lg transition-all',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
                   'focus:outline-none focus:ring-2 focus:ring-blue-500'
                 )}
                 aria-label="Next image"
               >
-                <HiChevronRight className="h-5 w-5 sm:h-6 sm:w-6 text-gray-700" />
+                <HiChevronRight className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </button>
             </>
           )}
@@ -510,8 +516,8 @@ export const ImageCarousel = ({
                 className={clsx(
                   'w-1.5 h-1.5 rounded-full transition-all',
                   index === activeIndex
-                    ? 'bg-blue-600 w-5'
-                    : 'bg-gray-300 hover:bg-gray-400'
+                    ? 'bg-blue-500 w-5'
+                    : 'bg-white/30 hover:bg-white/50'
                 )}
                 aria-label={`Go to image ${index + 1}`}
               />
@@ -521,7 +527,7 @@ export const ImageCarousel = ({
 
         {/* Image Counter - Hidden in reorder mode */}
         {!isReorderMode && (
-          <div className="text-center text-xs text-gray-500">
+          <div className="text-center text-xs text-white/60">
             Image {activeIndex + 1} of {images.length}
           </div>
         )}
