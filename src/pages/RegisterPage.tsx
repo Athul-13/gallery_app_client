@@ -1,6 +1,4 @@
-import { Link } from 'react-router-dom'
 import { RegisterForm } from '@/components/auth/RegisterForm'
-import { ROUTES } from '@/constants'
 
 /**
  * Register Page
@@ -9,18 +7,12 @@ export const RegisterPage = () => {
   return (
     <div className="min-h-screen flex items-center justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-md space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-2xl sm:text-3xl font-extrabold text-white">
+        <div className="text-center">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-2">
             Create your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-white/50">
-            Or{' '}
-            <Link
-              to={ROUTES.LOGIN}
-              className="font-medium text-white hover:text-white/80"
-            >
-              sign in to your existing account
-            </Link>
+          </h1>
+          <p className="text-white/60 text-sm sm:text-base">
+            Get started by creating a new account
           </p>
         </div>
         <RegisterForm />

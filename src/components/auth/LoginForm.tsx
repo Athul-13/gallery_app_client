@@ -82,15 +82,25 @@ export const LoginForm = () => {
           Sign in
         </FormButton>
 
-        {/* Link to Register */}
-        <div className="text-center text-sm">
-          <span className="text-white/50">Don't have an account? </span>
-          <Link
-            to={ROUTES.REGISTER}
-            className="font-medium text-white hover:text-white/80 transition-colors"
-          >
-            Create account
-          </Link>
+        {/* Links */}
+        <div className="space-y-3 text-center text-sm">
+          <div>
+            <Link
+              to={ROUTES.FORGOT_PASSWORD}
+              className="font-medium text-white hover:text-white/80 transition-colors"
+            >
+              Forgot password?
+            </Link>
+          </div>
+          <div>
+            <span className="text-white/50">Don't have an account? </span>
+            <Link
+              to={ROUTES.REGISTER}
+              className="font-medium text-white hover:text-white/80 transition-colors"
+            >
+              Create account
+            </Link>
+          </div>
         </div>
       </Fieldset>
     </form>

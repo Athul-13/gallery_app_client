@@ -9,6 +9,8 @@ import { useAuthStore } from '@/store'
 const HomePage = lazy(() => import('@/pages').then(module => ({ default: module.HomePage })))
 const LoginPage = lazy(() => import('@/pages').then(module => ({ default: module.LoginPage })))
 const RegisterPage = lazy(() => import('@/pages').then(module => ({ default: module.RegisterPage })))
+const ForgotPasswordPage = lazy(() => import('@/pages').then(module => ({ default: module.ForgotPasswordPage })))
+const ResetPasswordPage = lazy(() => import('@/pages').then(module => ({ default: module.ResetPasswordPage })))
 const DashboardPage = lazy(() => import('@/pages').then(module => ({ default: module.DashboardPage })))
 const NotFoundPage = lazy(() => import('@/pages').then(module => ({ default: module.NotFoundPage })))
 
@@ -52,6 +54,22 @@ function App() {
             element={
               <PublicRoute>
                 <RegisterPage />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path={ROUTES.FORGOT_PASSWORD}
+            element={
+              <PublicRoute>
+                <ForgotPasswordPage />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path={ROUTES.RESET_PASSWORD}
+            element={
+              <PublicRoute>
+                <ResetPasswordPage />
               </PublicRoute>
             }
           />
