@@ -63,3 +63,21 @@ export interface UploadProgress {
  * Image upload state
  */
 export type ImageUploadState = 'idle' | 'uploading' | 'success' | 'error'
+
+/**
+ * Bulk order update request payload
+ */
+export interface BulkOrderUpdateRequest {
+  orders: Array<{
+    id: string
+    order: number
+  }>
+}
+
+/**
+ * Bulk order update response
+ */
+export interface BulkOrderUpdateResponse {
+  images: Image[]
+  total: number
+}

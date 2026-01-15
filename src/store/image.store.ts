@@ -6,6 +6,7 @@ import type {
   ImageUploadState,
 } from '@/types'
 import toast from 'react-hot-toast'
+import { arrayMove } from '@dnd-kit/sortable'
 
 /**
  * Image Store State Interface
@@ -26,6 +27,10 @@ interface ImageState {
   // Selected files for upload (before upload starts)
   selectedFiles: File[]
   selectedTitles: string[]
+  
+  // Reordering state
+  isReordering: boolean
+  previousOrder: Image[] | null
 }
 
 /**
@@ -42,6 +47,11 @@ interface ImageActions {
     id: string,
     updates: { title?: string; order?: number; file?: File }
   ) => Promise<void>
+  bulkUpdateOrder: (orders: Array<{ id: string; order: number }>) => Promise<void>
+  
+  // Reordering actions
+  reorderImages: (activeId: string, overId: string) => void
+  revertReorder: () => void
   
   // Upload state management
   setUploadState: (state: ImageUploadState) => void
@@ -79,6 +89,8 @@ const initialState: ImageState = {
   uploadProgress: null,
   selectedFiles: [],
   selectedTitles: [],
+  isReordering: false,
+  previousOrder: null,
 }
 
 /**
@@ -497,6 +509,102 @@ export const useImageStore = create<ImageStore>((set, get) => ({
         images: filteredImages,
         total: Math.max(0, state.total - 1),
       }
+    })
+  },
+
+  /**
+   * Bulk update order for multiple images
+   * @param orders - Array of { id, order } pairs representing new order
+   */
+  bulkUpdateOrder: async (orders: Array<{ id: string; order: number }>) => {
+    set({ isReordering: true, error: null })
+
+    try {
+      const result = await imageService.bulkUpdateOrder(orders)
+
+      // Update images in store with new order values
+      set((state) => {
+        const updatedImages = state.images.map((img) => {
+          const updated = result.images.find((updatedImg) => updatedImg.id === img.id)
+          return updated || img
+        })
+
+        // Sort by order to maintain correct order
+        updatedImages.sort((a, b) => a.order - b.order)
+
+        return {
+          images: updatedImages,
+          isReordering: false,
+          previousOrder: null,
+        }
+      })
+
+      toast.success('Image order updated successfully')
+    } catch (error) {
+      // Revert to previous order on error
+      const state = get()
+      if (state.previousOrder) {
+        set({
+          images: state.previousOrder,
+          isReordering: false,
+          previousOrder: null,
+        })
+      } else {
+        set({ isReordering: false })
+      }
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to update image order'
+      set({ error: errorMessage })
+      toast.error(errorMessage)
+      throw error
+    }
+  },
+
+  /**
+   * Reorder images locally (optimistic update)
+   * @param activeId - ID of the dragged image
+   * @param overId - ID of the image it's being dragged over
+   */
+  reorderImages: (activeId: string, overId: string) => {
+    set((state) => {
+      // Save previous order for potential revert (only if not already saved)
+      const previousOrder = state.previousOrder || [...state.images]
+
+      const oldIndex = state.images.findIndex((img) => img.id === activeId)
+      const newIndex = state.images.findIndex((img) => img.id === overId)
+
+      if (oldIndex === -1 || newIndex === -1) {
+        return state
+      }
+
+      const reorderedImages = arrayMove(state.images, oldIndex, newIndex)
+
+      // Update order values based on new positions
+      const imagesWithNewOrder = reorderedImages.map((img, index) => ({
+        ...img,
+        order: index,
+      }))
+
+      return {
+        images: imagesWithNewOrder,
+        previousOrder,
+      }
+    })
+  },
+
+  /**
+   * Revert to previous order
+   */
+  revertReorder: () => {
+    set((state) => {
+      if (state.previousOrder) {
+        return {
+          images: state.previousOrder,
+          previousOrder: null,
+        }
+      }
+      return state
     })
   },
 

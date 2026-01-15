@@ -3,6 +3,7 @@
  */
 
 export { ImageCard } from './ImageCard'
+export { SortableImageCard } from './SortableImageCard'
 export { ImageCardPlaceholder } from './ImageCardPlaceholder'
 export { UploadModal } from './UploadModal'
 export { ImageCarousel } from './ImageCarousel'

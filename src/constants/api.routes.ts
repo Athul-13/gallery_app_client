@@ -28,5 +28,6 @@ export const API_ROUTES = {
     GET_BY_ID: (id: string) => `/images/${id}`,
     DELETE: (id: string) => `/images/${id}/delete`,
     UPDATE: (id: string) => `/images/${id}/update`,
+    BULK_UPDATE_ORDER: '/images/bulk-update-order',
   },
 } as const

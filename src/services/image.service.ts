@@ -5,6 +5,7 @@ import type {
   BulkUploadResponse,
   PaginatedImagesResponse,
   ApiResponse,
+  BulkOrderUpdateResponse,
 } from '@/types'
 
 /**
@@ -163,6 +164,23 @@ export const imageService = {
         },
       }
     )
+
+    return response.data.data
+  },
+
+  /**
+   * Bulk update order for multiple images
+   * @param orders - Array of { id, order } pairs representing new order
+   * @returns Bulk order update response with updated images
+   */
+  async bulkUpdateOrder(
+    orders: Array<{ id: string; order: number }>
+  ): Promise<BulkOrderUpdateResponse> {
+    const response = await apiClient.put<
+      ApiResponse<BulkOrderUpdateResponse>
+    >(API_ROUTES.IMAGE.BULK_UPDATE_ORDER, {
+      orders,
+    })
 
     return response.data.data
   },

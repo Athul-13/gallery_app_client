@@ -1,9 +1,32 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import {
+  DndContext,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+  type DragOverEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable'
+import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { useImageStore } from '@/store'
 import { Navbar, UploadProgressBar } from '@/components/common'
-import { ImageCard, ImageCardPlaceholder, UploadModal, ImageLightbox } from '@/components/images'
+import {
+  SortableImageCard,
+  ImageCardPlaceholder,
+  UploadModal,
+  ImageLightbox,
+} from '@/components/images'
 import { useInfiniteScroll } from '@/hooks'
 import type { Image } from '@/types'
+import toast from 'react-hot-toast'
 
 export const DashboardPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -20,6 +43,28 @@ export const DashboardPage = () => {
   const fetchImages = useImageStore((state) => state.fetchImages)
   const uploadState = useImageStore((state) => state.uploadState)
   const uploadProgress = useImageStore((state) => state.uploadProgress)
+  const isReordering = useImageStore((state) => state.isReordering)
+  const reorderImages = useImageStore((state) => state.reorderImages)
+  const bulkUpdateOrder = useImageStore((state) => state.bulkUpdateOrder)
+
+  // Sensors for drag and drop with optimized activation delay
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        delay: 150, // Reduced delay for smoother feel
+        tolerance: 8, // Increased tolerance for better responsiveness
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  // Memoize items array to prevent unnecessary re-renders
+  const sortableItems = useMemo(
+    () => images.map((img) => img.id),
+    [images]
+  )
 
   // Calculate if there are more images to load
   const hasMore = page * limit < total
@@ -134,6 +179,71 @@ export const DashboardPage = () => {
     })
   }, [images.length])
 
+  /**
+   * Handle drag start
+   */
+  const handleDragStart = useCallback((_event: DragStartEvent) => {
+    // Drag start handled by @dnd-kit automatically
+  }, [])
+
+  /**
+   * Handle drag over - show visual feedback
+   */
+  const handleDragOver = useCallback((_event: DragOverEvent) => {
+    // Visual feedback is handled by @dnd-kit automatically
+  }, [])
+
+  /**
+   * Handle drag end - save new order
+   */
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event
+
+      if (!over || active.id === over.id) {
+        return
+      }
+
+      // Prevent concurrent drags
+      if (isReordering) {
+        return
+      }
+
+      const activeId = active.id as string
+      const overId = over.id as string
+
+      // Optimistically update UI
+      reorderImages(activeId, overId)
+
+      // Prepare orders array for API call
+      const currentImages = useImageStore.getState().images
+      const orders = currentImages.map((img, index) => ({
+        id: img.id,
+        order: index,
+      }))
+
+      // Show loading toast
+      const toastId = toast.loading('Saving new order...')
+
+      try {
+        // Save to backend
+        await bulkUpdateOrder(orders)
+        toast.success('Order saved successfully', { id: toastId })
+      } catch (error) {
+        // Error handling and revert is done in the store
+        toast.error('Failed to save order', { id: toastId })
+      }
+    },
+    [isReordering, reorderImages, bulkUpdateOrder]
+  )
+
+  /**
+   * Handle drag cancel
+   */
+  const handleDragCancel = useCallback(() => {
+    // Drag cancel handled by @dnd-kit automatically
+  }, [])
+
   return (
     <div className="min-h-screen">
       {/* Fixed Navbar */}
@@ -172,17 +282,33 @@ export const DashboardPage = () => {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  <ImageCardPlaceholder onClick={handleModalOpen} />
-                  {images.map((image, index) => (
-                    <ImageCard
-                      key={image.id}
-                      image={image}
-                      onClick={() => handleImageClick(index)}
-                      onEdit={handleEditImage}
-                    />
-                  ))}
-                </div>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCorners}
+                  modifiers={[restrictToParentElement]}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragEnd={handleDragEnd}
+                  onDragCancel={handleDragCancel}
+                >
+                  <SortableContext
+                    items={sortableItems}
+                    strategy={rectSortingStrategy}
+                    disabled={isReordering}
+                  >
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                      <ImageCardPlaceholder onClick={handleModalOpen} />
+                      {images.map((image, index) => (
+                        <SortableImageCard
+                          key={image.id}
+                          image={image}
+                          onClick={() => handleImageClick(index)}
+                          onEdit={handleEditImage}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
 
                 {/* Sentinel element for infinite scroll */}
                 {hasMore && (
