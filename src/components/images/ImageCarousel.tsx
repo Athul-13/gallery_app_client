@@ -23,7 +23,7 @@ import { HiChevronLeft, HiChevronRight } from 'react-icons/hi'
 import clsx from 'clsx'
 
 interface ImageWithTitle {
-  file: File
+  file: File | null // null for edit mode when using existing image URL
   preview: string
   title: string
   id: string
@@ -118,7 +118,7 @@ const SortableImageItem = memo(({
       >
         <img
           src={image.preview}
-          alt={image.file.name}
+          alt={image.file?.name || image.title || 'Image'}
           className="w-full h-full object-cover pointer-events-none"
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />

@@ -114,4 +114,56 @@ export const imageService = {
 
     return response.data.data
   },
+
+  /**
+   * Delete an image by ID
+   * @param id - Image ID
+   * @returns void
+   */
+  async deleteImage(id: string): Promise<void> {
+    await apiClient.delete<ApiResponse<{ message: string }>>(
+      API_ROUTES.IMAGE.DELETE(id)
+    )
+  },
+
+  /**
+   * Update an image by ID
+   * @param id - Image ID
+   * @param updates - Update data (title, order, and optionally a new image file)
+   * @returns Updated image
+   */
+  async updateImage(
+    id: string,
+    updates: {
+      title?: string
+      order?: number
+      file?: File
+    }
+  ): Promise<Image> {
+    const formData = new FormData()
+
+    if (updates.title !== undefined) {
+      formData.append('title', updates.title)
+    }
+
+    if (updates.order !== undefined) {
+      formData.append('order', updates.order.toString())
+    }
+
+    if (updates.file) {
+      formData.append('image', updates.file)
+    }
+
+    const response = await apiClient.put<ApiResponse<Image>>(
+      API_ROUTES.IMAGE.UPDATE(id),
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    )
+
+    return response.data.data
+  },
 }

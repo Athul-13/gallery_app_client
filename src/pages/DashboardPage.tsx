@@ -1,13 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useImageStore } from '@/store'
 import { Navbar, UploadProgressBar } from '@/components/common'
 import { ImageCard, ImageCardPlaceholder, UploadModal, ImageLightbox } from '@/components/images'
+import { useInfiniteScroll } from '@/hooks'
+import type { Image } from '@/types'
 
 export const DashboardPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
-  const sentinelRef = useRef<HTMLDivElement>(null)
+  const [editImage, setEditImage] = useState<Image | null>(null)
 
   const images = useImageStore((state) => state.images)
   const isLoading = useImageStore((state) => state.isLoading)
@@ -24,14 +26,15 @@ export const DashboardPage = () => {
 
   // Fetch initial images on mount (first 20 images)
   useEffect(() => {
-    fetchImages({ page: 1, limit: 20, append: false })
+    fetchImages({ page: 1, limit: 14, append: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Reset to first page when upload succeeds
+  // Reset to first page when upload/update succeeds
   useEffect(() => {
     if (uploadState === 'success') {
-      fetchImages({ page: 1, limit: 20, append: false })
+      fetchImages({ page: 1, limit: 14, append: false })
+      setEditImage(null) // Reset edit image after successful update
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadState])
@@ -40,38 +43,18 @@ export const DashboardPage = () => {
    * Load more images when user scrolls to bottom
    */
   const loadMoreImages = useCallback(() => {
-    if (!isLoadingMore && !isLoading && hasMore) {
-      fetchImages({ page: page + 1, limit: 20, append: true })
-    }
-  }, [isLoadingMore, isLoading, hasMore, page, fetchImages])
+    fetchImages({ page: page + 1, limit: 14, append: true })
+  }, [page, fetchImages])
 
   /**
-   * Intersection Observer for infinite scroll
+   * Infinite scroll hook
    */
-  useEffect(() => {
-    const sentinel = sentinelRef.current
-    if (!sentinel) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries
-        if (entry.isIntersecting && hasMore && !isLoadingMore && !isLoading) {
-          loadMoreImages()
-        }
-      },
-      {
-        root: null,
-        rootMargin: '100px', // Start loading 100px before reaching the sentinel
-        threshold: 0.1,
-      }
-    )
-
-    observer.observe(sentinel)
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [hasMore, isLoadingMore, isLoading, loadMoreImages])
+  const sentinelRef = useInfiniteScroll({
+    hasMore,
+    isLoadingMore,
+    isLoading,
+    onLoadMore: loadMoreImages,
+  })
 
   const handleFilesSelected = useCallback((files: File[]) => {
     setSelectedFiles(files)
@@ -83,6 +66,7 @@ export const DashboardPage = () => {
 
   const handleModalClose = useCallback(() => {
     setIsModalOpen(false)
+    setEditImage(null) // Reset edit image when closing modal
     // Check uploadState from store - if success or idle, clear selected files
     const currentUploadState = useImageStore.getState().uploadState
     if (currentUploadState === 'success' || currentUploadState === 'idle') {
@@ -92,6 +76,9 @@ export const DashboardPage = () => {
 
   // Derive modal open state - open if user opened it or if upload failed with files
   const shouldShowModal = isModalOpen || (uploadState === 'error' && selectedFiles.length > 0)
+  
+  // Determine modal mode based on whether we're editing an image
+  const modalMode = editImage ? 'edit' : 'upload'
 
   /**
    * Handle image card click - open lightbox
@@ -101,9 +88,18 @@ export const DashboardPage = () => {
   }, [])
 
   /**
-   * Handle modal open
+   * Handle modal open (for upload mode)
    */
   const handleModalOpen = useCallback(() => {
+    setEditImage(null) // Ensure we're in upload mode
+    setIsModalOpen(true)
+  }, [])
+
+  /**
+   * Handle edit image - open modal in edit mode
+   */
+  const handleEditImage = useCallback((image: Image) => {
+    setEditImage(image)
     setIsModalOpen(true)
   }, [])
 
@@ -143,9 +139,12 @@ export const DashboardPage = () => {
       {/* Fixed Navbar */}
       <Navbar />
 
-      {/* Upload Progress Bar - Show at top during upload */}
+      {/* Upload/Update Progress Bar - Show at top during upload or update */}
       {uploadState === 'uploading' && uploadProgress && (
-        <UploadProgressBar progress={uploadProgress} />
+        <UploadProgressBar 
+          progress={uploadProgress} 
+          mode={editImage ? 'update' : 'upload'}
+        />
       )}
 
       {/* Main Content - with top padding for navbar and progress bar */}
@@ -180,6 +179,7 @@ export const DashboardPage = () => {
                       key={image.id}
                       image={image}
                       onClick={() => handleImageClick(index)}
+                      onEdit={handleEditImage}
                     />
                   ))}
                 </div>
@@ -235,6 +235,8 @@ export const DashboardPage = () => {
         onFilesSelected={handleFilesSelected}
         selectedFiles={selectedFiles}
         onUploadStart={handleUploadStart}
+        mode={modalMode}
+        editImage={editImage || undefined}
       />
 
       {/* Image Lightbox */}

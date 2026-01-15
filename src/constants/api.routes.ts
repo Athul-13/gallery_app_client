@@ -26,5 +26,7 @@ export const API_ROUTES = {
     UPLOAD: '/images/upload',
     GET_ALL: '/images/get',
     GET_BY_ID: (id: string) => `/images/${id}`,
+    DELETE: (id: string) => `/images/${id}/delete`,
+    UPDATE: (id: string) => `/images/${id}/update`,
   },
 } as const

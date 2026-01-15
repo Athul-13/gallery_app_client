@@ -2,8 +2,6 @@ import { create } from 'zustand'
 import { imageService } from '@/services'
 import type {
   Image,
-  BulkUploadResponse,
-  PaginatedImagesResponse,
   UploadProgress,
   ImageUploadState,
 } from '@/types'
@@ -39,6 +37,11 @@ interface ImageActions {
   uploadImage: (file: File, title: string) => Promise<void>
   uploadBulkImages: (files: File[], titles: string[]) => Promise<void>
   getImageById: (id: string) => Promise<Image | null>
+  deleteImage: (id: string) => Promise<void>
+  updateImageViaAPI: (
+    id: string,
+    updates: { title?: string; order?: number; file?: File }
+  ) => Promise<void>
   
   // Upload state management
   setUploadState: (state: ImageUploadState) => void
@@ -319,6 +322,94 @@ export const useImageStore = create<ImageStore>((set, get) => ({
       })
       toast.error(errorMessage)
       return null
+    }
+  },
+
+  /**
+   * Delete an image via API
+   */
+  deleteImage: async (id: string) => {
+    // Optimistically remove from store
+    const imageToDelete = get().images.find((img) => img.id === id)
+    get().removeImage(id)
+
+    try {
+      await imageService.deleteImage(id)
+      toast.success('Image deleted successfully')
+    } catch (error) {
+      // Revert optimistic update on error
+      if (imageToDelete) {
+        get().addImage(imageToDelete)
+      }
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to delete image'
+      set({ error: errorMessage })
+      toast.error(errorMessage)
+      throw error
+    }
+  },
+
+  /**
+   * Update an image via API
+   */
+  updateImageViaAPI: async (
+    id: string,
+    updates: { title?: string; order?: number; file?: File }
+  ) => {
+    // Optimistically update in store
+    const originalImage = get().images.find((img) => img.id === id)
+    if (originalImage) {
+      get().updateImage(id, updates as Partial<Image>)
+    }
+
+    // Set upload state and progress if file is being updated
+    const isUpdatingFile = !!updates.file
+    const imageName = originalImage?.title || updates.file?.name || 'image'
+
+    if (isUpdatingFile) {
+      set({
+        uploadState: 'uploading',
+        uploadProgress: {
+          currentImage: 1,
+          totalImages: 1,
+          currentImageName: imageName,
+          percentage: 0,
+        },
+      })
+    }
+
+    try {
+      const updatedImage = await imageService.updateImage(id, updates)
+
+      // Update with server response
+      get().updateImage(id, updatedImage)
+      
+      if (isUpdatingFile) {
+        set({
+          uploadState: 'success',
+          uploadProgress: null,
+        })
+      }
+      
+      toast.success('Image updated successfully')
+    } catch (error) {
+      // Revert optimistic update on error
+      if (originalImage) {
+        get().updateImage(id, originalImage)
+      }
+      
+      if (isUpdatingFile) {
+        set({
+          uploadState: 'error',
+          uploadProgress: null,
+        })
+      }
+      
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to update image'
+      set({ error: errorMessage })
+      toast.error(errorMessage)
+      throw error
     }
   },
 
