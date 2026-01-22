@@ -1,16 +1,30 @@
-import { useEffect } from 'react'
+import { useEffect, Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { ProtectedRoute, PublicRoute } from '@/components/common'
-import {
-  HomePage,
-  LoginPage,
-  RegisterPage,
-  DashboardPage,
-  NotFoundPage,
-} from '@/pages'
 import { ROUTES } from '@/constants'
 import { useAuthStore } from '@/store'
+
+// Lazy load page components for code splitting
+const HomePage = lazy(() => import('@/pages').then(module => ({ default: module.HomePage })))
+const LoginPage = lazy(() => import('@/pages').then(module => ({ default: module.LoginPage })))
+const RegisterPage = lazy(() => import('@/pages').then(module => ({ default: module.RegisterPage })))
+const ForgotPasswordPage = lazy(() => import('@/pages').then(module => ({ default: module.ForgotPasswordPage })))
+const ResetPasswordPage = lazy(() => import('@/pages').then(module => ({ default: module.ResetPasswordPage })))
+const DashboardPage = lazy(() => import('@/pages').then(module => ({ default: module.DashboardPage })))
+const NotFoundPage = lazy(() => import('@/pages').then(module => ({ default: module.NotFoundPage })))
+
+/**
+ * Loading fallback component for Suspense
+ */
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="text-center">
+      <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+      <p className="mt-4 text-white/60">Loading...</p>
+    </div>
+  </div>
+)
 
 function App() {
   const checkAuth = useAuthStore((state) => state.checkAuth)
@@ -23,39 +37,57 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Public routes */}
-        <Route path={ROUTES.HOME} element={<HomePage />} />
-        <Route
-          path={ROUTES.LOGIN}
-          element={
-            <PublicRoute>
-              <LoginPage />
-            </PublicRoute>
-          }
-        />
-        <Route
-          path={ROUTES.REGISTER}
-          element={
-            <PublicRoute>
-              <RegisterPage />
-            </PublicRoute>
-          }
-        />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* Public routes */}
+          <Route path={ROUTES.HOME} element={<HomePage />} />
+          <Route
+            path={ROUTES.LOGIN}
+            element={
+              <PublicRoute>
+                <LoginPage />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path={ROUTES.REGISTER}
+            element={
+              <PublicRoute>
+                <RegisterPage />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path={ROUTES.FORGOT_PASSWORD}
+            element={
+              <PublicRoute>
+                <ForgotPasswordPage />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path={ROUTES.RESET_PASSWORD}
+            element={
+              <PublicRoute>
+                <ResetPasswordPage />
+              </PublicRoute>
+            }
+          />
 
-        {/* Protected routes */}
-        <Route
-          path={ROUTES.DASHBOARD}
-          element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          }
-        />
+          {/* Protected routes */}
+          <Route
+            path={ROUTES.DASHBOARD}
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* 404 - Must be last */}
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+          {/* 404 - Must be last */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
 
       {/* Toast notifications */}
       <Toaster

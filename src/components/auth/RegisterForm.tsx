@@ -3,7 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Fieldset } from '@headlessui/react'
 import { useAuthStore } from '@/store'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { ROUTES } from '@/constants'
 import { HiMail, HiPhone } from 'react-icons/hi'
 import { FormInput, FormPasswordInput, FormButton } from '@/components/common'
@@ -111,6 +111,17 @@ export const RegisterForm = () => {
         <FormButton isLoading={isLoading} loadingText="Creating account...">
           Create account
         </FormButton>
+
+        {/* Link to Login */}
+        <div className="text-center text-sm">
+          <span className="text-white/50">Already have an account? </span>
+          <Link
+            to={ROUTES.LOGIN}
+            className="font-medium text-white hover:text-white/80 transition-colors"
+          >
+            Sign in
+          </Link>
+        </div>
       </Fieldset>
     </form>
   )

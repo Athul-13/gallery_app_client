@@ -1,0 +1,11 @@
+/**
+ * Central export point for image components
+ */
+
+export { ImageCard } from './ImageCard'
+export { SortableImageCard } from './SortableImageCard'
+export { ImageCardPlaceholder } from './ImageCardPlaceholder'
+export { UploadModal } from './UploadModal'
+export { ImageCarousel } from './ImageCarousel'
+export { ImageLightbox } from './ImageLightbox'
+export type { ImageWithTitle } from './useUploadModal'

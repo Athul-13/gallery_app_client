@@ -3,3 +3,4 @@
  */
 
 export { useAuthStore } from './auth.store'
+export { useImageStore } from './image.store'
